@@ -32,6 +32,9 @@
         </ul>
         <div class="nav-settings">
             <li class="nav-item" onclick="showSection('settings')">⚙️ Settings</li>
+            <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn">
+                <span class="toggle-icon">🌙</span> <span id="dark-mode-label">Dark Mode</span>
+            </button>
             <li class="nav-item" style="color: var(--danger)" onclick="logout()">🚪 Logout</li>
         </div>
     </nav>

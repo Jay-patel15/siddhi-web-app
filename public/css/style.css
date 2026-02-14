@@ -14,6 +14,216 @@
     --transition: all 0.3s ease;
 }
 
+/* ========================================
+   DARK MODE
+   ======================================== */
+body.dark-mode {
+    --primary: #6366f1;
+    --primary-hover: #818cf8;
+    --secondary: #34d399;
+    --danger: #f87171;
+    --warning: #fbbf24;
+    --dark: #e2e8f0;
+    --light: #1e293b;
+    --white: #1e293b;
+    --gray: #94a3b8;
+    --glass: rgba(30, 41, 59, 0.95);
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+    background-color: #0f172a;
+    color: #e2e8f0;
+}
+
+body.dark-mode .sidebar {
+    background: #1e293b;
+    border-right-color: #334155;
+}
+
+body.dark-mode .nav-item:hover,
+body.dark-mode .nav-item.active {
+    background-color: #334155;
+    color: var(--primary);
+}
+
+body.dark-mode .card {
+    background: #1e293b;
+    border: 1px solid #334155;
+}
+
+body.dark-mode input,
+body.dark-mode select {
+    background: #0f172a;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+
+body.dark-mode input:focus,
+body.dark-mode select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+body.dark-mode th {
+    background-color: #1e293b;
+    color: #94a3b8;
+}
+
+body.dark-mode td {
+    border-bottom-color: #334155;
+}
+
+body.dark-mode tr:hover {
+    background-color: #1e293b;
+}
+
+body.dark-mode table {
+    background: #0f172a;
+}
+
+body.dark-mode th,
+body.dark-mode td {
+    border-bottom-color: #334155;
+}
+
+body.dark-mode .switch-wrapper {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+body.dark-mode .overlay.active {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+body.dark-mode .mobile-toggle {
+    background: #1e293b;
+    color: #e2e8f0;
+}
+
+body.dark-mode label {
+    color: #e2e8f0;
+}
+
+/* Dark Mode Toggle Button */
+.dark-mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    cursor: pointer;
+    color: var(--gray);
+    transition: var(--transition);
+    font-weight: 500;
+    border: none;
+    background: none;
+    width: 100%;
+    font-size: 1rem;
+    font-family: inherit;
+}
+
+.dark-mode-toggle:hover {
+    background-color: #e0e7ff;
+    color: var(--primary);
+}
+
+body.dark-mode .dark-mode-toggle:hover {
+    background-color: #334155;
+}
+
+.dark-mode-toggle .toggle-icon {
+    font-size: 1.1rem;
+    transition: transform 0.3s ease;
+}
+
+body.dark-mode .dark-mode-toggle .toggle-icon {
+    transform: rotate(180deg);
+}
+
+/* Smooth transition for dark mode */
+body,
+.sidebar,
+.card,
+input,
+select,
+table,
+th,
+td,
+.nav-item,
+.switch-wrapper,
+label,
+.mobile-toggle {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* --- Dark Mode: Inline-styled elements (need !important) --- */
+
+/* Dashboard Employee Cards (JS sets background: white inline) */
+body.dark-mode .dashboard-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Modal Stat Cards (inline pastel backgrounds) */
+body.dark-mode .stat-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+/* Month Selector Bar in Modal */
+body.dark-mode #emp-detail-modal [style*="background: #f8fafc"],
+body.dark-mode [style*="background: #f8fafc"] {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+/* Payroll "Paid So Far" Box & summary sections */
+body.dark-mode div[style*="background: #f8fafc"] {
+    background: #0f172a !important;
+}
+
+/* Table containers with borders */
+body.dark-mode .table-container[style*="border: 1px solid #e2e8f0"] {
+    border-color: #334155 !important;
+}
+
+/* Modal header bar */
+body.dark-mode #emp-detail-modal>.card>div:first-child {
+    background: #1e293b !important;
+    border-bottom-color: #334155 !important;
+}
+
+/* Modal scrollable body */
+body.dark-mode #emp-detail-modal .card>div[style*="overflow-y: auto"] {
+    background: #0f172a !important;
+}
+
+/* Payroll grid border dashes */
+body.dark-mode div[style*="border-top: 1px dashed"] {
+    border-top-color: #334155 !important;
+}
+
+/* "Settled" disabled button */
+body.dark-mode .btn[style*="background: #e2e8f0"] {
+    background: #334155 !important;
+    color: #64748b !important;
+}
+
+/* h4 section titles in modal */
+body.dark-mode h4 {
+    color: #e2e8f0;
+}
+
+/* Employee avatar circle */
+body.dark-mode div[style*="background: #e0e7ff"] {
+    background: #334155 !important;
+}
+
+/* Payroll section card header */
+body.dark-mode #payroll h3,
+body.dark-mode #payroll h4 {
+    color: #e2e8f0;
+}
+
 * {
     box-sizing: border-box;
     margin: 0;

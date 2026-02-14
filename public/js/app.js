@@ -1,5 +1,30 @@
 const API_URL = '/api';
 
+// ==================== DARK MODE ====================
+function initDarkMode() {
+    const isDark = localStorage.getItem('darkMode') === 'true';
+    if (isDark) {
+        document.body.classList.add('dark-mode');
+        updateDarkModeUI(true);
+    }
+}
+
+function toggleDarkMode() {
+    const isDark = document.body.classList.toggle('dark-mode');
+    localStorage.setItem('darkMode', isDark);
+    updateDarkModeUI(isDark);
+}
+
+function updateDarkModeUI(isDark) {
+    const icon = document.querySelector('#dark-mode-btn .toggle-icon');
+    const label = document.getElementById('dark-mode-label');
+    if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+    if (label) label.textContent = isDark ? 'Light Mode' : 'Dark Mode';
+}
+
+// Initialize dark mode immediately (before DOMContentLoaded to avoid flash)
+initDarkMode();
+
 // Global State
 let globalSettings = { standardHours: 8.5, slabHours: 6 };
 let holidays = [];
@@ -141,6 +166,7 @@ async function loadDashboard() {
         fetch(`${API_URL}/payments`)
     ]);
     employeesData = await empRes.json();
+    employeesData.sort((a, b) => a.name.localeCompare(b.name));
     attendanceData = await attRes.json();
     advancesData = await advRes.json();
     const paymentsData = await payRes.json();
@@ -267,7 +293,7 @@ function renderEmployeeCards() {
         const card = document.createElement('div');
         card.className = 'dashboard-card';
         card.style.cssText = `
-            background: white; padding: 1.5rem; border-radius: 12px; 
+            background: var(--white); padding: 1.5rem; border-radius: 12px; 
             box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;
             cursor: pointer; transition: all 0.2s;
         `;
@@ -1039,6 +1065,7 @@ async function updateModalData() {
 async function loadEmployees() {
     const res = await fetch(`${API_URL}/employees`);
     employeesData = await res.json();
+    employeesData.sort((a, b) => a.name.localeCompare(b.name));
 
     const tbody = document.getElementById('employee-table-body');
     tbody.innerHTML = '';
@@ -1136,7 +1163,8 @@ async function loadAttendanceForm() {
     employees.forEach(emp => {
         const opt = document.createElement('option');
         opt.value = emp.id;
-        opt.innerText = emp.name; // Could show customId here too: `${emp.name} (${emp.customId || '-'})`
+        opt.dataset.salary = emp.salary;
+        opt.innerText = emp.name;
         if (emp.id === currentVal) opt.selected = true;
         select.appendChild(opt);
     });
@@ -1577,10 +1605,10 @@ async function loadPayroll() {
 
         const card = document.createElement('div');
         card.className = 'dashboard-card';
-        card.style.background = 'white';
+        card.style.background = 'var(--white)';
         card.style.padding = '1.5rem';
         card.style.borderRadius = '12px';
-        card.style.border = '1px solid #e2e8f0';
+        card.style.border = '1px solid var(--gray, #e2e8f0)';
         card.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
 
         card.innerHTML = `

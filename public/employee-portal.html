@@ -472,6 +472,99 @@
             color: black;
             transform: rotate(90deg);
         }
+
+        /* ====== DARK MODE ====== */
+        body.dark-mode {
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .header {
+            background: linear-gradient(135deg, #4338ca 0%, #5b21b6 100%);
+        }
+
+        body.dark-mode .modal-style-card,
+        body.dark-mode .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+        }
+
+        body.dark-mode .emp-details-header {
+            background: #1e293b;
+            border-bottom-color: #334155;
+        }
+
+        body.dark-mode input,
+        body.dark-mode select {
+            background: #0f172a;
+            border-color: #334155;
+            color: #e2e8f0;
+        }
+
+        body.dark-mode label {
+            color: #e2e8f0;
+        }
+
+        body.dark-mode table {
+            background: #0f172a;
+        }
+
+        body.dark-mode th {
+            background: #1e293b;
+            color: #94a3b8;
+        }
+
+        body.dark-mode td {
+            border-bottom-color: #334155;
+        }
+
+        body.dark-mode tr {
+            background: #1e293b;
+        }
+
+        body.dark-mode .section-title {
+            color: #e2e8f0;
+            border-bottom-color: #334155;
+        }
+
+        body.dark-mode .month-filter-bar {
+            background: #1e293b;
+            border-color: #334155;
+        }
+
+        body.dark-mode .modal-body-content {
+            background: #0f172a;
+        }
+
+        .dark-mode-btn-float {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: all 0.3s;
+        }
+
+        .dark-mode-btn-float:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        body,
+        .card,
+        .modal-style-card,
+        .emp-details-header,
+        input,
+        select,
+        table,
+        th,
+        td,
+        tr,
+        label {
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
     </style>
 </head>
 
@@ -483,6 +576,8 @@
             <h1 style="margin: 0;">Siddhi Electricals</h1>
         </div>
         <button class="logout-btn" onclick="logout()">🚪 Logout</button>
+        <button class="dark-mode-btn-float" onclick="toggleDarkMode()" id="portal-dark-btn"
+            title="Toggle Dark Mode">🌙</button>
     </header>
 
     <!-- Main Content -->
@@ -1472,6 +1567,28 @@
             localStorage.removeItem('payroll_session');
             window.location.href = 'login.html';
         }
+
+        // ====== DARK MODE ======
+        function initDarkMode() {
+            const isDark = localStorage.getItem('darkMode') === 'true';
+            if (isDark) {
+                document.body.classList.add('dark-mode');
+                updatePortalDarkBtn(true);
+            }
+        }
+
+        function toggleDarkMode() {
+            const isDark = document.body.classList.toggle('dark-mode');
+            localStorage.setItem('darkMode', isDark);
+            updatePortalDarkBtn(isDark);
+        }
+
+        function updatePortalDarkBtn(isDark) {
+            const btn = document.getElementById('portal-dark-btn');
+            if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+        }
+
+        initDarkMode();
     </script>
 </body>
 

@@ -10,6 +10,9 @@
 </head>
 
 <body>
+    <!-- Dark Mode Toggle -->
+    <button class="login-dark-toggle" onclick="toggleDarkMode()" id="login-dark-btn"
+        title="Toggle Dark Mode">🌙</button>
     <div class="login-container">
         <div class="logo">
             <img src="assets/logo-vertical.jpg" alt="Siddhi Electricals"
@@ -175,6 +178,25 @@
                 showError('Login failed. Please try again.');
             }
         }
+
+        // ====== DARK MODE ======
+        function initDarkMode() {
+            const isDark = localStorage.getItem('darkMode') === 'true';
+            if (isDark) {
+                document.body.classList.add('dark-mode');
+                const btn = document.getElementById('login-dark-btn');
+                if (btn) btn.textContent = '☀️';
+            }
+        }
+
+        function toggleDarkMode() {
+            const isDark = document.body.classList.toggle('dark-mode');
+            localStorage.setItem('darkMode', isDark);
+            const btn = document.getElementById('login-dark-btn');
+            if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+        }
+
+        initDarkMode();
     </script>
 </body>
 
