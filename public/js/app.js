@@ -914,6 +914,10 @@ async function updateModalData() {
     const absent = Math.max(0, workingDays - present);
 
     let earned = 0;
+    let totalNormalHours = 0;
+    let totalOTHours = 0;
+    let totalBasePay = 0;
+    let totalOTPay = 0;
 
     const attBody = document.getElementById('modal-att-body');
     attBody.innerHTML = '';
@@ -924,11 +928,22 @@ async function updateModalData() {
         const sal = parseFloat(emp.salary);
         const normalRate = sal / globalSettings.standardHours;
         let dayPay = 0;
+        let otLabel = '';
 
         if (a.slabMode && wh > globalSettings.standardHours) {
-            dayPay = (normalRate * globalSettings.standardHours) + ((sal / globalSettings.slabHours) * (wh - globalSettings.standardHours));
+            const normalPart = normalRate * globalSettings.standardHours;
+            const extraPart = (sal / globalSettings.slabHours) * (wh - globalSettings.standardHours);
+            dayPay = normalPart + extraPart;
+            otLabel = ' <span style="color:#d97706; font-weight:600; font-size:0.85em;">(OT)</span>';
+
+            totalNormalHours += globalSettings.standardHours;
+            totalOTHours += (wh - globalSettings.standardHours);
+            totalBasePay += normalPart;
+            totalOTPay += extraPart;
         } else {
             dayPay = normalRate * wh;
+            totalNormalHours += wh;
+            totalBasePay += dayPay;
         }
 
         earned += dayPay + (parseFloat(a.fare) || 0);
@@ -938,7 +953,7 @@ async function updateModalData() {
             <td>${a.date} ${holidays.includes(a.date) ? '<span style="color:var(--danger)">(H)</span>' : ''}</td>
             <td>${a.timeIn}</td>
             <td>${a.timeOut}</td>
-            <td>${wh.toFixed(2)}</td>
+            <td>${wh.toFixed(2)}${otLabel}</td>
             <td>₹${Math.round(dayPay)}</td>
         `;
         attBody.appendChild(tr);
@@ -966,25 +981,19 @@ async function updateModalData() {
     // Show Previous Balance in Modal
     // We'll inject it before the Payable Card or inside it
     const prevBalDiv = document.getElementById('modal-prev-balance');
-    if (!prevBalDiv) {
-        // Create if not exists (it won't exist in original HTML, so we might need to add a container in HTML or prepend here)
-        // Let's assume we can prepend to the stats area or just add an element
-        // Actually, looking at structure, maybe just log it? No, user needs to see it.
-        // Let's rely on the Net Payable logic updates but also show the line item if possible.
-        // We will insert a row in the summary area if we can find it.
-        // For now, let's just make sure "Net Payable" includes it, which we did above.
-    }
 
-    // Let's update the "Net Payable" label to hint at previous balance if it's non-zero
+    // Update New Cards
+    document.getElementById('modal-normal-hours').innerText = totalNormalHours.toFixed(2);
+    document.getElementById('modal-ot-hours').innerText = totalOTHours.toFixed(2);
+
     const payableLabel = document.querySelector('#modal-payable').previousElementSibling;
     if (payableLabel) {
-        if (previousBalance !== 0) {
-            payableLabel.innerText = "Net Payable (incl. Prev Bal)";
-            payableLabel.title = `Previous Amount: ${previousBalance}`;
-        } else {
-            payableLabel.innerText = "Net Payable";
-        }
+        // Show breakdown in title
+        payableLabel.innerText = "Net Payable";
+        payableLabel.title = `Base: ₹${Math.round(totalBasePay)} + OT: ₹${Math.round(totalOTPay)} = Earned: ₹${Math.round(earned)}`;
     }
+
+
 
     document.getElementById('modal-present').innerText = present;
     document.getElementById('modal-absent').innerText = absent;
@@ -995,41 +1004,29 @@ async function updateModalData() {
 
     if (prevBalEl && prevBalCard) {
         if (previousBalance === 0) {
-            prevBalEl.innerHTML = `<span style="color:var(--gray)">-</span>`;
-            prevBalCard.style.background = '#f8fafc';
-            prevBalCard.style.borderColor = '#e2e8f0';
-            prevBalCard.querySelector('.stat-title').style.color = 'var(--gray)';
+            prevBalEl.innerHTML = `<span style="color:inherit">-</span>`;
+            prevBalCard.className = 'stat-card card-neutral';
         } else {
-            const isNeg = previousBalance < 0; // Negative means OVERPAID/ADVANCE
-
-            const color = isNeg ? '#dc2626' : '#10b981';
-            const bg = isNeg ? '#fef2f2' : '#ecfdf5';
-            const border = isNeg ? '#fecaca' : '#a7f3d0';
-            const titleColor = isNeg ? '#be123c' : '#047857';
-
-            prevBalEl.innerHTML = `<span style="color: ${color}; font-weight: bold;">${previousBalance > 0 ? '+' : ''}₹${previousBalance}</span>`;
-            prevBalCard.style.background = bg;
-            prevBalCard.style.borderColor = border;
-            prevBalCard.querySelector('.stat-title').style.color = titleColor;
+            const isNeg = previousBalance < 0;
+            prevBalEl.innerHTML = `<span style="font-weight: bold;">${previousBalance > 0 ? '+' : ''}₹${previousBalance}</span>`;
+            prevBalCard.className = `stat-card ${isNeg ? 'card-negative' : 'card-positive'}`;
         }
     }
 
     // Update Net Payable Card
-
-    // Update Net Payable Card
     const payableEl = document.getElementById('modal-payable');
+    const payableCard = payableEl.parentElement;
+    const breakdownHtml = `<span style="font-size: 0.6em; display: block; color: inherit; opacity: 0.7; margin-top: 0.2rem; font-weight: normal;">(Earned: ₹${Math.round(totalBasePay)}+₹${Math.round(totalOTPay)})</span>`;
+
     if (balance <= 0 && totalPaid > 0) {
-        payableEl.innerHTML = `<span style="color: #10b981; font-weight: bold;">SETTLED</span>`;
-        payableEl.parentElement.style.background = '#ecfdf5'; // Light green
-        payableEl.parentElement.style.borderColor = '#10b981';
+        payableEl.innerHTML = `<span style="font-weight: bold;">SETTLED</span> ${breakdownHtml}`;
+        payableCard.className = 'stat-card card-positive';
     } else if (totalPaid > 0) {
-        payableEl.innerHTML = `₹${balance} <br><div style="font-size:0.7em; color:var(--gray); font-weight:normal">Due (Pd: ₹${totalPaid})</div>`;
-        payableEl.parentElement.style.background = '#fefce8'; // Warning yellow
-        payableEl.parentElement.style.borderColor = '#f59e0b';
+        payableEl.innerHTML = `₹${balance} ${breakdownHtml} <div style="font-size:0.7em; opacity: 0.8; font-weight:normal">Due (Pd: ₹${totalPaid})</div>`;
+        payableCard.className = 'stat-card card-warning';
     } else {
-        payableEl.innerHTML = `₹${Math.round(net)}`;
-        payableEl.parentElement.style.background = '#fff';
-        payableEl.parentElement.style.borderColor = '#e2e8f0';
+        payableEl.innerHTML = `₹${Math.round(net)} ${breakdownHtml}`;
+        payableCard.className = 'stat-card card-neutral';
     }
 
     // Render Advance Body

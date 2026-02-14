@@ -169,6 +169,47 @@ body.dark-mode .stat-card {
     border-color: #334155 !important;
 }
 
+/* Card Semantic Variants */
+.card-neutral {
+    background: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+}
+
+.card-positive {
+    background: #ecfdf5 !important;
+    border-color: #10b981 !important;
+}
+
+.card-negative {
+    background: #fef2f2 !important;
+    border-color: #dc2626 !important;
+}
+
+.card-warning {
+    background: #fefce8 !important;
+    border-color: #f59e0b !important;
+}
+
+body.dark-mode .card-neutral {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .card-positive {
+    background: #064e3b !important;
+    border-color: #059669 !important;
+}
+
+body.dark-mode .card-negative {
+    background: #450a0a !important;
+    border-color: #991b1b !important;
+}
+
+body.dark-mode .card-warning {
+    background: #451a03 !important;
+    border-color: #92400e !important;
+}
+
 /* Month Selector Bar in Modal */
 body.dark-mode #emp-detail-modal [style*="background: #f8fafc"],
 body.dark-mode [style*="background: #f8fafc"] {
@@ -222,6 +263,59 @@ body.dark-mode div[style*="background: #e0e7ff"] {
 body.dark-mode #payroll h3,
 body.dark-mode #payroll h4 {
     color: #e2e8f0;
+}
+
+/* Export Options Panel Dark Mode & Responsive */
+#export-options-panel {
+    display: flex;
+    justify-content: center;
+    /* Center on mobile if wrapped */
+}
+
+#export-options-panel>div {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    /* Center items */
+}
+
+/* On very small screens, ensure full width inputs */
+@media (max-width: 480px) {
+    #export-options-panel>div {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+    }
+
+    #export-options-panel select,
+    #export-options-panel button,
+    #export-options-panel input {
+        width: 100%;
+        margin-bottom: 0.5rem;
+        padding: 0.6rem !important;
+        /* Touch friendly padding */
+    }
+
+    #export-custom-dates {
+        flex-direction: column;
+        width: 100%;
+    }
+}
+
+/* Export Options Panel Dark Mode */
+body.dark-mode #export-options-panel {
+    background: #1e293b !important;
+    border-bottom-color: #334155 !important;
+    color: #e2e8f0;
+}
+
+body.dark-mode #export-options-panel select,
+body.dark-mode #export-options-panel input {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
 }
 
 * {

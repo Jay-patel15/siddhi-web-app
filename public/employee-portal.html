@@ -59,20 +59,36 @@
             gap: 0.5rem;
         }
 
-        .logout-btn {
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-btn {
             background: rgba(255, 255, 255, 0.2);
             color: white;
             border: none;
-            padding: 0.5rem 1rem;
+            padding: 0.5rem 0.85rem;
             border-radius: 8px;
             cursor: pointer;
             font-weight: 500;
             transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            height: 38px;
+            min-width: 38px;
         }
 
-        .logout-btn:hover {
+        .header-btn:hover {
             background: rgba(255, 255, 255, 0.3);
             transform: translateY(-1px);
+        }
+
+        .header-btn i {
+            font-size: 1.1rem;
         }
 
         /* Main Content */
@@ -216,6 +232,98 @@
             color: #10b981;
         }
 
+        /* New Stat Card Variants */
+        .normal-hours-card {
+            background: #eef2ff;
+            border: 1px solid #c7d2fe;
+        }
+
+        .normal-hours-card .stat-title {
+            color: #3730a3;
+        }
+
+        .normal-hours-card .stat-value {
+            color: #4338ca;
+        }
+
+        .ot-hours-card {
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+        }
+
+        .ot-hours-card .stat-title {
+            color: #b45309;
+        }
+
+        .ot-hours-card .stat-value {
+            color: #d97706;
+        }
+
+        .total-hours-card {
+            background: #fdf4ff;
+            border: 1px solid #f0abfc;
+        }
+
+        .total-hours-card .stat-title {
+            color: #86198f;
+        }
+
+        .total-hours-card .stat-value {
+            color: #c026d3;
+        }
+
+        .gross-earned-card {
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+        }
+
+        .gross-earned-card .stat-title {
+            color: #9a3412;
+        }
+
+        .gross-earned-card .stat-value {
+            color: #ea580c;
+        }
+
+        .prev-bal-neutral {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+        }
+
+        .prev-bal-neutral .stat-title {
+            color: var(--gray);
+        }
+
+        .prev-bal-neutral .stat-value {
+            color: var(--dark);
+        }
+
+        .prev-bal-pos {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+        }
+
+        .prev-bal-pos .stat-title {
+            color: #047857;
+        }
+
+        .prev-bal-pos .stat-value {
+            color: #10b981;
+        }
+
+        .prev-bal-neg {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+        }
+
+        .prev-bal-neg .stat-title {
+            color: #be123c;
+        }
+
+        .prev-bal-neg .stat-value {
+            color: #dc2626;
+        }
+
         /* Section Titles */
         .section-title {
             font-size: 1rem;
@@ -332,7 +440,8 @@
             }
 
             .dashboard-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 0.75rem;
             }
 
             .month-filter-bar {
@@ -475,6 +584,15 @@
 
         /* ====== DARK MODE ====== */
         body.dark-mode {
+            --primary: #6366f1;
+            --primary-hover: #818cf8;
+            --secondary: #34d399;
+            --danger: #f87171;
+            --warning: #fbbf24;
+            --dark: #e2e8f0;
+            --light: #1e293b;
+            --white: #1e293b;
+            --gray: #94a3b8;
             background-color: #0f172a;
             color: #e2e8f0;
         }
@@ -501,6 +619,148 @@
             color: #e2e8f0;
         }
 
+        /* Dark Mode Card Overrides */
+        body.dark-mode .present-card {
+            background: #0c4a6e;
+            border-color: #0369a1;
+        }
+
+        body.dark-mode .present-card .stat-title {
+            color: #bae6fd;
+        }
+
+        body.dark-mode .present-card .stat-value {
+            color: #38bdf8;
+        }
+
+        body.dark-mode .absent-card {
+            background: #881337;
+            border-color: #be123c;
+        }
+
+        body.dark-mode .absent-card .stat-title {
+            color: #fecdd3;
+        }
+
+        body.dark-mode .absent-card .stat-value {
+            color: #fb7185;
+        }
+
+        body.dark-mode .payable-card {
+            background: #064e3b;
+            border-color: #047857;
+        }
+
+        body.dark-mode .payable-card .stat-title {
+            color: #a7f3d0;
+        }
+
+        body.dark-mode .payable-card .stat-value {
+            color: #34d399;
+        }
+
+        body.dark-mode .normal-hours-card {
+            background: #1e1b4b;
+            border-color: #312e81;
+        }
+
+        body.dark-mode .normal-hours-card .stat-title {
+            color: #c7d2fe;
+        }
+
+        body.dark-mode .normal-hours-card .stat-value {
+            color: #818cf8;
+        }
+
+        body.dark-mode .ot-hours-card {
+            background: #451a03;
+            border-color: #78350f;
+        }
+
+        /* actually amber/orange base */
+        body.dark-mode .ot-hours-card {
+            background: #422006;
+            border-color: #92400e;
+        }
+
+        body.dark-mode .ot-hours-card .stat-title {
+            color: #fcd34d;
+        }
+
+        body.dark-mode .ot-hours-card .stat-value {
+            color: #fbbf24;
+        }
+
+        body.dark-mode .total-hours-card {
+            background: #4a044e;
+            border-color: #86198f;
+        }
+
+        body.dark-mode .total-hours-card .stat-title {
+            color: #f0abfc;
+        }
+
+        body.dark-mode .total-hours-card .stat-value {
+            color: #e879f9;
+        }
+
+        body.dark-mode .gross-earned-card {
+            background: #431407;
+            border-color: #9a3412;
+        }
+
+        body.dark-mode .gross-earned-card .stat-title {
+            color: #fed7aa;
+        }
+
+        body.dark-mode .gross-earned-card .stat-value {
+            color: #fb923c;
+        }
+
+        body.dark-mode .prev-bal-neutral {
+            background: #1e293b;
+            border-color: #334155;
+        }
+
+        body.dark-mode .prev-bal-neutral .stat-title {
+            color: #94a3b8;
+        }
+
+        body.dark-mode .prev-bal-neutral .stat-value {
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .prev-bal-pos {
+            background: #064e3b;
+            border-color: #047857;
+        }
+
+        body.dark-mode .prev-bal-pos .stat-title {
+            color: #a7f3d0;
+        }
+
+        body.dark-mode .prev-bal-pos .stat-value {
+            color: #34d399;
+        }
+
+        body.dark-mode .prev-bal-neg {
+            background: #7f1d1d;
+            border-color: #991b1b;
+        }
+
+        body.dark-mode .prev-bal-neg .stat-title {
+            color: #fecaca;
+        }
+
+        body.dark-mode .prev-bal-neg .stat-value {
+            color: #f87171;
+        }
+
+        /* (OT) Indicator High Contrast in Dark Mode */
+        body.dark-mode .ot-label {
+            color: #fbbf24 !important;
+        }
+
         body.dark-mode label {
             color: #e2e8f0;
         }
@@ -516,10 +776,15 @@
 
         body.dark-mode td {
             border-bottom-color: #334155;
+            color: #cbd5e1;
         }
 
         body.dark-mode tr {
             background: #1e293b;
+        }
+
+        body.dark-mode tr:hover {
+            background: #334155;
         }
 
         body.dark-mode .section-title {
@@ -536,21 +801,6 @@
             background: #0f172a;
         }
 
-        .dark-mode-btn-float {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: none;
-            padding: 0.5rem 0.75rem;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1.1rem;
-            transition: all 0.3s;
-        }
-
-        .dark-mode-btn-float:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: translateY(-1px);
-        }
 
         body,
         .card,
@@ -575,9 +825,11 @@
             <img src="assets/logo-horizontal.png" alt="Siddhi Electricals" style="height: 40px; width: auto;">
             <h1 style="margin: 0;">Siddhi Electricals</h1>
         </div>
-        <button class="logout-btn" onclick="logout()">🚪 Logout</button>
-        <button class="dark-mode-btn-float" onclick="toggleDarkMode()" id="portal-dark-btn"
-            title="Toggle Dark Mode">🌙</button>
+        <div class="header-actions">
+            <button class="header-btn" onclick="logout()">🚪 Logout</button>
+            <button class="header-btn" onclick="toggleDarkMode()" id="portal-dark-btn"
+                title="Toggle Dark Mode">🌙</button>
+        </div>
     </header>
 
     <!-- Main Content -->
@@ -623,21 +875,31 @@
                         <div class="stat-value" id="stat-absent">0</div>
                     </div>
                     <!-- Previous Balance Card -->
-                    <div class="stat-card" id="card-prev-bal" style="border: 1px solid #e2e8f0;">
+                    <div class="stat-card prev-bal-neutral" id="card-prev-bal">
                         <div class="stat-title">Previous Balance</div>
                         <div class="stat-value" id="stat-prev-bal">₹0</div>
                     </div>
+                    <!-- Normal Hours Card -->
+                    <div class="stat-card normal-hours-card">
+                        <div class="stat-title">Normal Hours</div>
+                        <div class="stat-value" id="stat-normal-hours">0</div>
+                    </div>
+                    <!-- OT Hours Card -->
+                    <div class="stat-card ot-hours-card">
+                        <div class="stat-title">Overtime Hours</div>
+                        <div class="stat-value" id="stat-ot-hours">0</div>
+                    </div>
                     <div class="stat-card payable-card">
-                        <div class="stat-title">Net Payable</div>
+                        <div class="stat-title" title="Net Payable (Base + OT)">Net Payable</div>
                         <div class="stat-value" id="stat-net">₹0</div>
                     </div>
-                    <div class="stat-card" style="background: #fdf4ff; border: 1px solid #f0abfc;">
-                        <div class="stat-title" style="color: #86198f;">Total Hours</div>
-                        <div class="stat-value" id="stat-hours" style="color: #c026d3;">0</div>
+                    <div class="stat-card total-hours-card">
+                        <div class="stat-title">Total Hours</div>
+                        <div class="stat-value" id="stat-hours">0</div>
                     </div>
-                    <div class="stat-card" style="background: #fff7ed; border: 1px solid #fed7aa;">
-                        <div class="stat-title" style="color: #9a3412;">Gross Earned</div>
-                        <div class="stat-value" id="stat-gross" style="color: #ea580c;">₹0</div>
+                    <div class="stat-card gross-earned-card">
+                        <div class="stat-title">Gross Earned</div>
+                        <div class="stat-value" id="stat-gross">₹0</div>
                     </div>
                 </div>
 
@@ -913,8 +1175,36 @@
             console.log('Stats:', { daysPresent, totalDaysInMonth, daysAbsent });
 
             let totalEarned = 0;
+            let totalNormalHours = 0;
+            let totalOTHours = 0;
+            let totalBasePay = 0;
+            let totalOTPay = 0;
+
+            const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
+            const slabHours = (allData.settings && allData.settings.slabHours) ? parseFloat(allData.settings.slabHours) : 6;
+
             myAttendance.forEach(att => {
-                totalEarned += calculateDayEarning(att);
+                const wh = parseFloat(att.workedHours);
+                const salary = parseFloat(currentEmployee.salary);
+                const normalRate = salary / stdHours;
+                let dayPay = 0;
+
+                if (att.slabMode && wh > stdHours) {
+                    const normalPart = normalRate * stdHours;
+                    const slabRate = salary / slabHours; // Assuming slabHours is defined or global
+                    const extraPart = slabRate * (wh - stdHours);
+                    dayPay = normalPart + extraPart;
+
+                    totalNormalHours += stdHours;
+                    totalOTHours += (wh - stdHours);
+                    totalBasePay += normalPart;
+                    totalOTPay += extraPart;
+                } else {
+                    dayPay = normalRate * wh;
+                    totalNormalHours += wh;
+                    totalBasePay += dayPay;
+                }
+                totalEarned += dayPay + (parseFloat(att.fare) || 0);
             });
 
             const totalAdvances = myAdvances
@@ -933,8 +1223,7 @@
             // 1. Past Earnings
             const pastAtt = allData.attendance.filter(a => a.employeeId === currentEmployee.id && a.date < `${month}-01`);
             let pastEarnings = 0;
-            const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
-            const slabHours = (allData.settings && allData.settings.slabHours) ? parseFloat(allData.settings.slabHours) : 6;
+
 
             pastAtt.forEach(att => {
                 const wh = parseFloat(att.workedHours);
@@ -971,22 +1260,38 @@
             document.getElementById('stat-present').innerText = daysPresent;
             document.getElementById('stat-absent').innerText = daysAbsent;
 
+            // Update New Cards
+            const normEl = document.getElementById('stat-normal-hours');
+            if (normEl) normEl.innerText = totalNormalHours.toFixed(2);
+
+            const otEl = document.getElementById('stat-ot-hours');
+            if (otEl) otEl.innerText = totalOTHours.toFixed(2);
+
+            // Update Net Payable Title/Breakdown
+            const netCard = document.querySelector('.payable-card');
+            if (netCard) {
+                const title = netCard.querySelector('.stat-title');
+                if (title) title.innerText = "Net Payable";
+                if (title) title.title = `Base: ₹${Math.round(totalBasePay)} + OT: ₹${Math.round(totalOTPay)} = Earned: ₹${Math.round(totalEarned)}`;
+
+                // Add visible breakdown to value
+                const val = document.getElementById('stat-net');
+                if (val) {
+                    val.innerHTML = `₹${Math.round(netPayable)} <span style="font-size: 0.6em; display: block; color: var(--gray); margin-top: 0.2rem; font-weight: normal;">(Earned: ₹${Math.round(totalBasePay)}+₹${Math.round(totalOTPay)})</span>`;
+                }
+            }
+
             // Previous Balance Stat
             const prevEl = document.getElementById('stat-prev-bal');
             const prevCard = document.getElementById('card-prev-bal');
 
             if (previousBalance === 0) {
-                prevEl.innerHTML = '<span style="color:var(--gray)">-</span>';
-                prevCard.style.background = '#f8fafc';
-                prevCard.style.borderColor = '#e2e8f0';
+                prevEl.innerHTML = '<span style="color:inherit">-</span>';
+                prevCard.className = 'stat-card prev-bal-neutral';
             } else {
                 const isNeg = previousBalance < 0;
-                const color = isNeg ? '#dc2626' : '#10b981';
-                const bg = isNeg ? '#fef2f2' : '#ecfdf5';
-                const border = isNeg ? '#fecaca' : '#a7f3d0';
-                prevEl.innerHTML = `<span style="color: ${color};">${previousBalance > 0 ? '+' : ''}₹${previousBalance}</span>`;
-                prevCard.style.background = bg;
-                prevCard.style.borderColor = border;
+                prevEl.innerHTML = `<span>${previousBalance > 0 ? '+' : ''}₹${previousBalance}</span>`;
+                prevCard.className = `stat-card ${isNeg ? 'prev-bal-neg' : 'prev-bal-pos'}`;
             }
 
             document.getElementById('stat-net').innerText = netPayable <= 0 ? 'SETTLED' : `₹${Math.round(netPayable)}`;
@@ -1005,13 +1310,22 @@
 
         function calculateDayEarning(att) {
             const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
+            const slabHours = (allData.settings && allData.settings.slabHours) ? parseFloat(allData.settings.slabHours) : 6;
             const salary = parseFloat(currentEmployee.dailySalary || currentEmployee.salary || 0);
 
             if (!salary) return 0;
 
-            const hourlyRate = salary / stdHours;
+            const normalRate = salary / stdHours;
             const hours = parseFloat(att.totalHours || att.workedHours || 0);
-            return hours * hourlyRate;
+
+            if (att.slabMode && hours > stdHours) {
+                const normalPart = normalRate * stdHours;
+                const slabRate = salary / slabHours;
+                const extraPart = slabRate * (hours - stdHours);
+                return normalPart + extraPart;
+            } else {
+                return hours * normalRate;
+            }
         }
 
         function updateAttendanceTable(data) {
@@ -1026,15 +1340,23 @@
             }
 
             empty.style.display = 'none';
+            const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
+
             tbody.innerHTML = data.map(att => {
                 const earned = calculateDayEarning(att);
                 const hours = parseFloat(att.totalHours || att.workedHours || 0);
+
+                let otLabel = '';
+                if (att.slabMode && hours > stdHours) {
+                    otLabel = ' <span class="ot-label" style="color:#d97706; font-weight:600; font-size:0.85em;">(OT)</span>';
+                }
+
                 return `
                     <tr>
                         <td data-label="Date">${att.date}</td>
                         <td data-label="In">${att.timeIn || '-'}</td>
                         <td data-label="Out">${att.timeOut || '-'}</td>
-                        <td data-label="Hours">${hours.toFixed(2)}</td>
+                        <td data-label="Hours">${hours.toFixed(2)}${otLabel}</td>
                         <td data-label="Earned">₹${earned.toFixed(0)}</td>
                     </tr>
                 `;
@@ -1310,6 +1632,8 @@
                 let otPay = 0;
                 let totalHours = 0;
                 let totalFare = 0;
+                let totalNormalHours = 0;
+                let totalOTHours = 0;
 
                 att.forEach(a => {
                     const wh = parseFloat(a.workedHours || a.totalHours || 0);
@@ -1321,8 +1645,11 @@
                         const extraPart = slabHourlyRate * (wh - stdHours);
                         basicPay += normalPart;
                         otPay += extraPart;
+                        totalNormalHours += stdHours;
+                        totalOTHours += (wh - stdHours);
                     } else {
                         basicPay += normalHourlyRate * wh;
+                        totalNormalHours += wh;
                     }
                 });
 
@@ -1404,10 +1731,19 @@
                 currentY += 6;
 
                 // Row 4
+                doc.setFont("helvetica", "bold"); doc.text("Normal Hours:", leftX, currentY);
+                doc.setFont("helvetica", "normal"); doc.text(`${totalNormalHours.toFixed(2)} hrs`, leftX + 35, currentY);
+
+                doc.setFont("helvetica", "bold"); doc.text("OT Hours:", rightX, currentY);
+                doc.setFont("helvetica", "normal"); doc.text(`${totalOTHours.toFixed(2)} hrs`, rightX + 25, currentY);
+
+                currentY += 6;
+
+                // Row 5
                 doc.setFont("helvetica", "bold"); doc.text("Total Hours:", leftX, currentY);
                 doc.setFont("helvetica", "normal"); doc.text(`${totalHours.toFixed(2)} hrs`, leftX + 35, currentY);
 
-                doc.line(14, 66, 196, 66);
+                doc.line(14, currentY + 4, 196, currentY + 4);
 
                 // --- 4. EARNINGS & DEDUCTIONS TABLE ---
                 const tableY = 75;

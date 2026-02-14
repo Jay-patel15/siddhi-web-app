@@ -443,10 +443,10 @@
             <!-- Holiday Management Card (Moved from Dashboard) -->
             <div class="card">
                 <h3>Holiday Management</h3>
-                <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
-                    <div>
-                        <label>Select Date</label>
-                        <input type="date" id="holiday-date-picker" style="padding: 0.75rem;">
+                <div class="filter-group" style="flex-wrap: wrap; align-items: flex-end;">
+                    <div class="filter-item" style="flex-direction: column; align-items: flex-start; gap: 0.25rem;">
+                        <label class="filter-label">Select Date</label>
+                        <input type="date" id="holiday-date-picker" class="filter-input">
                     </div>
                     <button class="btn" style="background: var(--danger); color: white;" onclick="markHoliday()">Mark
                         Holiday</button>
@@ -499,19 +499,17 @@
             <!-- Export Options (Hidden by default) -->
             <div id="export-options-panel"
                 style="display: none; padding: 0.75rem 1.5rem; background: #f0fdf4; border-bottom: 1px solid #bbf7d0; flex-shrink: 0;">
-                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <div>
                     <span style="font-weight: bold; font-size: 0.85rem;">Range:</span>
-                    <select id="export-range-type"
-                        style="padding: 0.3rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.8rem;"
-                        onchange="toggleExportInputs()">
+                    <select id="export-range-type" onchange="toggleExportInputs()">
                         <option value="month">This Month</option>
                         <option value="3months">Last 3 Months</option>
                         <option value="year">This Year</option>
                         <option value="custom">Custom</option>
                     </select>
                     <span id="export-custom-dates" style="display: none; gap: 0.5rem; align-items: center;">
-                        <input type="date" id="export-start-date" style="padding: 0.25rem; font-size: 0.8rem;"> -
-                        <input type="date" id="export-end-date" style="padding: 0.25rem; font-size: 0.8rem;">
+                        <input type="date" id="export-start-date"> -
+                        <input type="date" id="export-end-date">
                     </span>
                     <button class="btn"
                         style="background: #10b981; color: white; padding: 0.3rem 0.6rem; font-size: 0.8rem;"
@@ -542,8 +540,19 @@
                         <div class="stat-title" style="color: var(--gray);">Previous Balance</div>
                         <div class="stat-value" id="modal-prev-balance" style="color: var(--dark);">₹0</div>
                     </div>
+                    <!-- Normal Hours Card -->
+                    <div class="stat-card" style="background: #eef2ff; border: 1px solid #c7d2fe;">
+                        <div class="stat-title" style="color: #3730a3;">Normal Hours</div>
+                        <div class="stat-value" id="modal-normal-hours" style="color: #4338ca;">0</div>
+                    </div>
+                    <!-- OT Hours Card -->
+                    <div class="stat-card" style="background: #fffbeb; border: 1px solid #fcd34d;">
+                        <div class="stat-title" style="color: #b45309;">Overtime Hours</div>
+                        <div class="stat-value" id="modal-ot-hours" style="color: #d97706;">0</div>
+                    </div>
                     <div class="stat-card" style="background: #ecfdf5; border: 1px solid #a7f3d0;">
-                        <div class="stat-title" style="color: #047857;">Net Payable</div>
+                        <div class="stat-title" style="color: #047857;" title="Net Payable (Base + OT)">Net Payable
+                        </div>
                         <div class="stat-value" id="modal-payable" style="color: #10b981;">₹0</div>
                     </div>
                 </div>
