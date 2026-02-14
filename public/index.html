@@ -255,9 +255,18 @@
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                     <h3>Attendance Records</h3>
-                    <div style="display: flex; gap: 1rem; align-items: center;">
-                        <label for="att-filter-month" style="margin:0;">Filter by Month:</label>
-                        <input type="month" id="att-filter-month" onchange="loadAttendanceTable()">
+                    <div class="filter-group">
+                        <div class="filter-item">
+                            <label for="att-filter-month" class="filter-label">Filter by Month:</label>
+                            <input type="month" id="att-filter-month" onchange="loadAttendanceTable()"
+                                class="filter-input">
+                        </div>
+                        <div class="filter-item">
+                            <label for="att-filter-employee" class="filter-label">Employee:</label>
+                            <select id="att-filter-employee" onchange="loadAttendanceTable()" class="filter-input">
+                                <option value="">All Employees</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <div class="table-container">
@@ -309,7 +318,8 @@
                         <label style="color: #be123c; font-weight: bold;">Deduct from Salary of
                             (Month)</label>
                         <input type="month" id="adv-deduction-month" required style="border: 2px solid #fecdd3;">
-                        <small style="display: block; margin-top: 4px; color: var(--gray);">Select the
+                        <small style="display: block; margin-top: 4px; color: var(--primary); font-weight: 500;">Select
+                            the
                             month you want
                             this to be deducted from.</small>
                     </div>

@@ -37,14 +37,24 @@ let currentModalMonth = null;
 
 // Check authentication on page load
 function checkAuth() {
-    const session = localStorage.getItem('payroll_session');
-    if (!session) {
+    const sessionStr = localStorage.getItem('payroll_session');
+    if (!sessionStr) {
         window.location.href = 'login.html';
         return false;
     }
-    const data = JSON.parse(session);
-    if (data.role !== 'admin') {
+
+    const session = JSON.parse(sessionStr);
+    const now = Date.now();
+    const limit = 12 * 60 * 60 * 1000; // 12 Hours
+
+    if (now - session.timestamp > limit) {
+        localStorage.removeItem('payroll_session');
         window.location.href = 'login.html';
+        return false;
+    }
+
+    if (session.role !== 'admin') {
+        window.location.href = 'employee-portal.html';
         return false;
     }
     return true;
@@ -1157,16 +1167,35 @@ async function loadAttendanceForm() {
     const employees = await res.json();
 
     const select = document.getElementById('att-employee');
+    const filterSelect = document.getElementById('att-filter-employee');
     const currentVal = select.value;
+    const currentFilterVal = filterSelect ? filterSelect.value : '';
+
     select.innerHTML = '<option value="">Select Employee</option>';
+    if (filterSelect) {
+        filterSelect.innerHTML = '<option value="">All Employees</option>';
+    }
+
+    // Sort Employees Alphabetically
+    employees.sort((a, b) => a.name.localeCompare(b.name));
 
     employees.forEach(emp => {
+        // Form Dropdown
         const opt = document.createElement('option');
         opt.value = emp.id;
         opt.dataset.salary = emp.salary;
         opt.innerText = emp.name;
         if (emp.id === currentVal) opt.selected = true;
         select.appendChild(opt);
+
+        // Filter Dropdown
+        if (filterSelect) {
+            const fOpt = document.createElement('option');
+            fOpt.value = emp.id; // Filter by ID
+            fOpt.innerText = emp.name;
+            if (emp.id === currentFilterVal) fOpt.selected = true;
+            filterSelect.appendChild(fOpt);
+        }
     });
 }
 
@@ -1252,8 +1281,11 @@ async function loadAttendanceTable() {
     const tbody = document.getElementById('attendance-table-body');
     tbody.innerHTML = '';
 
+    const empFilter = document.getElementById('att-filter-employee') ? document.getElementById('att-filter-employee').value : '';
+
     const filtered = attendanceData
         .filter(a => a.date.startsWith(monthInput))
+        .filter(a => !empFilter || a.employeeId == empFilter)
         .sort((a, b) => new Date(b.date) - new Date(a.date));
 
     filtered.forEach(att => {
@@ -1657,7 +1689,7 @@ async function loadPayroll() {
                 `<button class="btn btn-primary" style="flex: 1;" onclick="openPaymentModal('${p.employee.id}', '${remainingDue}')">Mark Paid</button>` :
                 `<div class="btn" style="flex: 1; background: #e2e8f0; color: #94a3b8; cursor: not-allowed; text-align:center;">Settled</div>`
             }
-                <button class="btn" style="background: var(--dark); color: white;" onclick="openEmployeeModal('${p.employee.id}')">Payslip</button>
+                <button class="btn" style="background: var(--dark); color: var(--white);" onclick="openEmployeeModal('${p.employee.id}')">Payslip</button>
             </div>
         `;
         grid.appendChild(card);

@@ -948,13 +948,65 @@ tr:hover {
 }
 
 /* Fix for modals on all screen sizes */
-#gallery-modal,
 #emp-detail-modal,
 #holiday-modal,
 #advance-edit-modal,
 #payment-modal,
 #delete-confirm-modal {
     padding: 0;
+}
+
+/* --- Filter Inputs (Attendance, etc.) --- */
+.filter-group {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.filter-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.filter-label {
+    margin: 0;
+    font-weight: 500;
+    color: var(--gray);
+    font-size: 0.85rem;
+}
+
+.filter-input {
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    height: 38px;
+    font-size: 0.9rem;
+    background-color: var(--white);
+    color: var(--dark);
+    min-width: 160px;
+    transition: all 0.3s ease;
+}
+
+input[type="month"].filter-input {
+    min-width: auto;
+}
+
+/* Dark Mode Overrides for Filters */
+body.dark-mode .filter-input {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .filter-label {
+    color: #94a3b8 !important;
+}
+
+/* Invert calendar icon in dark mode */
+body.dark-mode ::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
 }
 
 @media (max-width: 768px) {

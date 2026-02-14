@@ -743,6 +743,28 @@
     </div>
 
     <script>
+        // --- 12 Hour Auto-Logout ---
+        (function checkAuth() {
+            const sessionStr = localStorage.getItem('payroll_session');
+            if (!sessionStr) {
+                window.location.href = 'login.html';
+                return;
+            }
+            try {
+                const session = JSON.parse(sessionStr);
+                const now = Date.now();
+                const limit = 12 * 60 * 60 * 1000; // 12 Hours
+                if (now - session.timestamp > limit) {
+                    localStorage.removeItem('payroll_session');
+                    window.location.href = 'login.html';
+                }
+            } catch (e) {
+                // Invalid session data
+                localStorage.removeItem('payroll_session');
+                window.location.href = 'login.html';
+            }
+        })();
+
         const API_URL = '';
         let currentEmployee = null;
         let allData = {
