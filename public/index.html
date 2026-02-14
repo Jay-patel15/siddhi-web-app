@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Siddhi Electricals | Payroll System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+</head>
+
+<body>
+
+    <!-- Overlay -->
+    <div class="overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="brand" style="display: flex; align-items: center; gap: 10px;">
+            <img src="assets/logo-horizontal.png" alt="Siddhi Electricals" style="height: 40px; width: auto;">
+            <span>Siddhi Electricals</span>
+        </div>
+        <ul class="nav-links">
+            <li class="nav-item active" onclick="showSection('dashboard')">🏠 Dashboard</li>
+            <li class="nav-item" onclick="showSection('employees')">👥 Employees</li>
+            <li class="nav-item" onclick="showSection('attendance')">🕒 Attendance</li>
+            <li class="nav-item" onclick="showSection('advance')">💲 Advance Payments</li>
+            <li class="nav-item" onclick="showSection('payroll')">📄 Payroll</li>
+            <li class="nav-item" onclick="showSection('uploads')">📷 Uploads</li>
+        </ul>
+        <div class="nav-settings">
+            <li class="nav-item" onclick="showSection('settings')">⚙️ Settings</li>
+            <li class="nav-item" style="color: var(--danger)" onclick="logout()">🚪 Logout</li>
+        </div>
+    </nav>
+
+    <!-- Enhanced Preview Modal -->
+    <div id="enhanced-preview-modal" class="preview-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 2000; flex-direction: column; justify-content: center; align-items: center;">
+
+        <div class="preview-header"
+            style="position: absolute; top: 20px; left: 0; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box; z-index: 2001;">
+            <span style="color: white; font-size: 1.2rem; font-weight: 500;">Preview</span>
+            <div style="display: flex; gap: 15px;">
+                <button onclick="downloadPreviewImage()"
+                    style="background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 20px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                    ⬇ Download
+                </button>
+                <button onclick="closeEnhancedPreview()"
+                    style="background: rgba(255,255,255,0.2); color: white; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 1.5rem; cursor: pointer; display: flex; justify-content: center; align-items: center;">
+                    ✕
+                </button>
+            </div>
+        </div>
+
+        <div class="preview-body"
+            style="width: 100%; height: 80%; display: flex; justify-content: center; align-items: center; overflow: hidden;">
+            <img id="enhanced-preview-img" src="" alt="Proof"
+                style="max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.3s ease;">
+        </div>
+
+        <div class="preview-footer"
+            style="position: absolute; bottom: 30px; left: 0; width: 100%; text-align: center; color: white; padding: 0 20px; box-sizing: border-box;">
+            <h3 id="preview-caption-title" style="margin: 0; font-size: 1.5rem; font-weight: 600;">Category</h3>
+            <p id="preview-caption-date" style="margin: 5px 0 0; opacity: 0.8; font-size: 1rem;">Date • Amount</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header style="display: flex; align-items: center; gap: 1rem;">
+            <button class="hamburger-btn" onclick="toggleSidebar()"
+                style="display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">☰</button>
+            <div>
+                <h1 id="page-title" style="display: flex; align-items: center; gap: 10px;">
+                    <img src="assets/logo-vertical.jpg" alt="Logo" style="height: 30px; width: auto;">
+
+                </h1>
+                <p class="subtitle">Welcome to your payroll management system</p>
+            </div>
+        </header>
+
+        <!-- DASHBOARD SECTION -->
+        <section id="dashboard" class="section active">
+            <!-- Dashboard Month Filter -->
+            <div class="card dashboard-controls"
+                style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; padding: 1rem;">
+                <label style="font-weight: bold; white-space: nowrap;">Filter Dashboard Amounts:</label>
+                <input type="month" id="dashboard-month-filter"
+                    style="padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;" onchange="loadDashboard()">
+            </div>
+
+            <!-- Stats Row -->
+            <div class="dashboard-grid">
+                <div class="stat-card" style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: white;">
+                    <div class="stat-title" style="color: #e0e7ff;">Total Employees</div>
+                    <div class="stat-value" id="dash-total-emp">0</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">
+                    <div class="stat-title" style="color: #d1fae5;">Today's Attendance</div>
+                    <div class="stat-value" id="dash-today-att">0</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
+                    <div class="stat-title" style="color: #fef3c7;">Total Payroll (Month)</div>
+                    <div class="stat-value" id="dash-curr-payroll">₹0</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white;">
+                    <div class="stat-title" style="color: #fee2e2;">Total Advances</div>
+                    <div class="stat-value" id="dash-advances">₹0</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white;">
+                    <div class="stat-title" style="color: #ede9fe;">Total Pending Dues</div>
+                    <div class="stat-value" id="dash-pending-dues">₹0</div>
+                </div>
+            </div>
+
+
+
+            <!-- Employee Cards Grid -->
+            <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Employee Quick Access</h3>
+            <div id="employee-cards-container" class="dashboard-grid"
+                style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">
+                <!-- Cards Injected Here -->
+            </div>
+        </section>
+
+        <!-- EMPLOYEES SECTION -->
+        <section id="employees" class="section">
+            <!-- Employee Form -->
+            <div class="card" id="employee-form-container">
+                <h3>Add / Edit Employee</h3>
+                <form id="employee-form">
+                    <input type="hidden" id="emp-id">
+
+                    <div class="form-group grid-2">
+                        <div>
+                            <label>Employee Name</label>
+                            <input type="text" id="emp-name" required>
+                        </div>
+                        <div>
+                            <label>Custom Ref ID (Optional)</label>
+                            <input type="text" id="emp-custom-id" placeholder="e.g. EMP001">
+                        </div>
+                    </div>
+
+                    <div class="form-group grid-2">
+                        <div>
+                            <label>Contact</label>
+                            <input type="text" id="emp-contact" required>
+                        </div>
+                        <div>
+                            <label>Designation</label>
+                            <input type="text" id="emp-designation" placeholder="e.g. Electrician">
+                        </div>
+                    </div>
+
+                    <div class="form-group grid-2">
+                        <div>
+                            <label>Daily Salary (8.5 Hours)</label>
+                            <input type="number" id="emp-salary" required>
+                        </div>
+                        <div>
+                            <label>Employee Login Password</label>
+                            <input type="text" id="emp-password" placeholder="Set password for employee" value="123456">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="emp-submit-btn">Add Employee</button>
+                        <button type="button" class="btn" id="emp-cancel-btn" style="display: none;"
+                            onclick="resetEmployeeForm()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>Employee List</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Contact</th>
+                                <th>Daily Salary</th>
+                                <th>Hourly Rate</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="employee-table-body">
+                            <!-- Dynamic Content -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ATTENDANCE SECTION -->
+        <section id="attendance" class="section">
+            <div class="card">
+                <h3>Mark Daily Attendance</h3>
+                <form id="attendance-form">
+                    <input type="hidden" id="att-id">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="att-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Employee</label>
+                        <select id="att-employee" required>
+                            <option value="">Select Employee</option>
+                        </select>
+                    </div>
+
+                    <div class="switch-wrapper">
+                        <label class="switch">
+                            <input type="checkbox" id="att-slab-mode">
+                            <span class="slider round"></span>
+                        </label>
+                        <div>
+                            <strong>Slab Piping Mode</strong>
+                            <p style="font-size: 0.8rem; color: var(--gray)">Toggle ON for fixed slab
+                                payment (8.5h + 6h
+                                Bonus)</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Time In</label>
+                        <input type="time" id="att-time-in">
+                    </div>
+                    <div class="form-group">
+                        <label>Time Out</label>
+                        <input type="time" id="att-time-out">
+                    </div>
+                    <div class="form-group">
+                        <label>Daily Fare (₹)</label>
+                        <input type="number" id="att-fare" placeholder="0">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block" id="att-submit-btn">Submit
+                        Attendance</button>
+                    <button type="button" class="btn btn-block" id="att-cancel-btn"
+                        style="display:none; background: var(--gray); color: white; margin-top: 0.5rem;"
+                        onclick="resetAttendanceForm()">Cancel Edit</button>
+                    <div id="att-result" style="margin-top: 1rem; font-weight: bold; color: var(--secondary)"></div>
+                </form>
+            </div>
+
+            <!-- Attendance List -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>Attendance Records</h3>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <label for="att-filter-month" style="margin:0;">Filter by Month:</label>
+                        <input type="month" id="att-filter-month" onchange="loadAttendanceTable()">
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Employee</th>
+                                <th>Time In</th>
+                                <th>Time Out</th>
+                                <th>Hours</th>
+                                <th>Mode</th>
+                                <th>Salary (Est.)</th>
+                                <th>Fare</th>
+                                <th>Total</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendance-table-body">
+                            <!-- Dynamic Content -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ADVANCE PAYMENT SECTION -->
+        <section id="advance" class="section">
+            <div class="card">
+                <h3>Record Advance Payment</h3>
+                <form id="advance-form">
+                    <input type="hidden" id="adv-id">
+                    <div class="form-group">
+                        <label>Employee</label>
+                        <select id="adv-employee" required>
+                            <option value="">Select Employee</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount (₹)</label>
+                        <input type="number" id="adv-amount" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="adv-date" required>
+                    </div>
+                    <div class="form-group"
+                        style="background: #fff1f2; padding: 10px; border-radius: 6px; border: 1px dashed #fecdd3;">
+                        <label style="color: #be123c; font-weight: bold;">Deduct from Salary of
+                            (Month)</label>
+                        <input type="month" id="adv-deduction-month" required style="border: 2px solid #fecdd3;">
+                        <small style="display: block; margin-top: 4px; color: var(--gray);">Select the
+                            month you want
+                            this to be deducted from.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Payment Mode</label>
+                        <select id="adv-mode">
+                            <option value="Cash">Cash</option>
+                            <option value="Online">Online/UPI</option>
+                            <option value="Check">Check</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Screenshot Proof</label>
+                        <input type="file" id="adv-screenshot" accept="image/*">
+                    </div>
+                    <div class="form-group">
+                        <label>Notes</label>
+                        <input type="text" id="adv-notes">
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="adv-submit-btn">Save
+                        Payment</button>
+                    <button type="button" class="btn" id="adv-cancel-btn"
+                        style="display:none; background: var(--gray); color: white;"
+                        onclick="resetAdvanceForm()">Cancel</button>
+                </form>
+            </div>
+
+            <!-- Advance List -->
+            <div class="card">
+                <h3>Advance History</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Employee</th>
+                                <th>Amount</th>
+                                <th>Deduct Month</th>
+                                <th>Mode</th>
+                                <th>Notes</th>
+                                <th>Proof</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="advance-table-body">
+                            <!-- Dynamic Content -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- PAYROLL SECTION -->
+        <section id="payroll" class="section">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>Monthly Payroll Sheet</h3>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <label for="payroll-month" style="margin:0;">Select Month:</label>
+                        <input type="month" id="payroll-month" onchange="loadPayroll()">
+                        <button class="btn btn-primary" onclick="loadPayroll()">Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Cards Grid -->
+                <div id="payroll-grid" class="dashboard-grid"
+                    style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
+                    <!-- Dynamic Cards -->
+                </div>
+            </div>
+        </section>
+
+        <!-- UPLOADS SECTION -->
+        <section id="uploads" class="section">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h3>📷 Payment Proofs & Screenshots</h3>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <label for="uploads-filter-month" style="margin: 0;">Filter:</label>
+                        <input type="month" id="uploads-filter-month" onchange="loadUploadsPage()">
+                        <button class="btn btn-primary" onclick="loadUploadsPage()">Refresh</button>
+                    </div>
+                </div>
+                <p style="color: var(--gray); margin-bottom: 1.5rem;">View and manage all uploaded payment proofs
+                    organized by employee.</p>
+
+                <!-- Employee Cards Grid -->
+                <div id="uploads-employee-grid" class="dashboard-grid"
+                    style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));">
+                    <!-- Dynamic Employee Cards -->
+                </div>
+            </div>
+        </section>
+
+        <!-- SETTINGS SECTION -->
+        <section id="settings" class="section">
+            <div class="card">
+                <h3>Global Configuration</h3>
+                <p class="subtitle" style="margin-bottom: 2rem;">Changes here affect all calculations
+                    immediately.</p>
+                <form id="settings-form">
+                    <div class="form-group">
+                        <label>Standard Working Hours (Day)</label>
+                        <input type="number" id="set-standard-hours" step="0.1" required>
+                        <small style="color: var(--gray)">Default: 8.5. Used to calculate Normal Hourly
+                            Rate.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Slab Base Hours</label>
+                        <input type="number" id="set-slab-hours" step="0.1" required>
+                        <small style="color: var(--gray)">Default: 6. Used to calculate Slab Hourly
+                            Rate.</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                    <button type="button" class="btn" style="background: var(--dark); color: white;"
+                        onclick="resetSettings()">Reset to Defaults</button>
+                </form>
+            </div>
+
+            <!-- Holiday Management Card (Moved from Dashboard) -->
+            <div class="card">
+                <h3>Holiday Management</h3>
+                <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+                    <div>
+                        <label>Select Date</label>
+                        <input type="date" id="holiday-date-picker" style="padding: 0.75rem;">
+                    </div>
+                    <button class="btn" style="background: var(--danger); color: white;" onclick="markHoliday()">Mark
+                        Holiday</button>
+                    <button class="btn" style="background: var(--dark); color: white;"
+                        onclick="openHolidayModal()">Manage List</button>
+                </div>
+            </div>
+
+            <hr style="margin: 2rem 0; border: 0; border-top: 1px solid #e2e8f0;">
+
+            <div class="card" style="background: #fff1f2; border: 1px solid #fecdd3;">
+                <h4 style="color: #be123c; margin-top: 0;">Danger Zone</h4>
+                <p style="color: #be123c; font-size: 0.9rem; margin-bottom: 1rem;">Destructive actions. Proceed with
+                    caution.</p>
+                <button class="btn" style="background: #e11d48; color: white;" onclick="confirmFactoryReset()">⚠ Factory
+                    Reset (Clear All Data)</button>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- EMPLOYEE DETAIL MODAL -->
+    <div id="emp-detail-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div class="card"
+            style="width: 90%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column; padding: 0; overflow: hidden;">
+
+            <!-- FIXED HEADER - Single Line -->
+            <div
+                style="padding: 1rem 1.5rem; border-bottom: 1px solid #e2e8f0; background: white; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
+                    <h2 id="modal-emp-name" style="margin: 0; font-size: 1.2rem;">Employee Name</h2>
+                    <div style="font-size: 0.8rem; color: #666;" id="modal-emp-details"></div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <button class="btn btn-primary" onclick="downloadPayslipPDF()"
+                        style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">PDF</button>
+                    <button class="btn"
+                        style="background: #10b981; color: white; padding: 0.4rem 0.8rem; font-size: 0.85rem;"
+                        onclick="showExportOptions()" id="btn-export-csv">CSV</button>
+                    <button class="btn"
+                        style="background: #25D366; color: white; padding: 0.4rem 0.8rem; font-size: 0.85rem;"
+                        onclick="sharePayslipWhatsApp()" title="Share Summary to WhatsApp">📱 WA</button>
+                    <button onclick="closeModal()"
+                        style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666; padding: 0 0.5rem;">&times;</button>
+                </div>
+            </div>
+
+            <!-- Export Options (Hidden by default) -->
+            <div id="export-options-panel"
+                style="display: none; padding: 0.75rem 1.5rem; background: #f0fdf4; border-bottom: 1px solid #bbf7d0; flex-shrink: 0;">
+                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                    <span style="font-weight: bold; font-size: 0.85rem;">Range:</span>
+                    <select id="export-range-type"
+                        style="padding: 0.3rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.8rem;"
+                        onchange="toggleExportInputs()">
+                        <option value="month">This Month</option>
+                        <option value="3months">Last 3 Months</option>
+                        <option value="year">This Year</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                    <span id="export-custom-dates" style="display: none; gap: 0.5rem; align-items: center;">
+                        <input type="date" id="export-start-date" style="padding: 0.25rem; font-size: 0.8rem;"> -
+                        <input type="date" id="export-end-date" style="padding: 0.25rem; font-size: 0.8rem;">
+                    </span>
+                    <button class="btn"
+                        style="background: #10b981; color: white; padding: 0.3rem 0.6rem; font-size: 0.8rem;"
+                        onclick="exportToCSV()">Download</button>
+                    <button style="background: none; border: none; cursor: pointer; color: #888; font-size: 1rem;"
+                        onclick="hideExportOptions()">&times;</button>
+                </div>
+            </div>
+
+            <!-- SCROLLABLE BODY -->
+            <div style="flex: 1; overflow-y: auto; padding: 1.5rem;">
+                <div
+                    style="margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem; background: #f8fafc; padding: 1rem; border-radius: 8px;">
+                    <label style="font-weight: bold;">Select Month:</label>
+                    <input type="month" id="modal-month-picker" onchange="updateModalData()">
+                </div>
+                <div class="dashboard-grid" style="margin-bottom: 2rem;">
+                    <div class="stat-card" style="background: #f0f9ff; border: 1px solid #bae6fd;">
+                        <div class="stat-title" style="color: #0369a1;">Days Present</div>
+                        <div class="stat-value" id="modal-present" style="color: #0ea5e9;">0</div>
+                    </div>
+                    <div class="stat-card" style="background: #fff1f2; border: 1px solid #fecdd3;">
+                        <div class="stat-title" style="color: #be123c;">Absent / Holidays</div>
+                        <div class="stat-value" id="modal-absent" style="color: #f43f5e;">0</div>
+                    </div>
+                    <!-- Previous Balance Card -->
+                    <div class="stat-card" id="modal-card-prev" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                        <div class="stat-title" style="color: var(--gray);">Previous Balance</div>
+                        <div class="stat-value" id="modal-prev-balance" style="color: var(--dark);">₹0</div>
+                    </div>
+                    <div class="stat-card" style="background: #ecfdf5; border: 1px solid #a7f3d0;">
+                        <div class="stat-title" style="color: #047857;">Net Payable</div>
+                        <div class="stat-value" id="modal-payable" style="color: #10b981;">₹0</div>
+                    </div>
+                </div>
+                <h4>Attendance History</h4>
+                <div class="table-container"
+                    style="max-height: 200px; overflow-y: auto; margin-bottom: 2rem; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>In</th>
+                                <th>Out</th>
+                                <th>Hours</th>
+                                <th>Earned</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-att-body"></tbody>
+                    </table>
+                </div>
+                <h4>Advance History</h4>
+                <div class="table-container"
+                    style="max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 2rem;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Notes</th>
+                                <th>Proof</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-adv-body"></tbody>
+                    </table>
+                </div>
+
+                <h4>Salary Payments</h4>
+                <div class="table-container"
+                    style="max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Mode</th>
+                                <th>Amount</th>
+                                <th>Proof</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-pay-body"></tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- End Scrollable Body -->
+        </div>
+    </div>
+    <!-- HOLIDAY LIST MODAL -->
+    <div id="holiday-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1001; justify-content: center; align-items: center;">
+        <div class="card" style="width: 90%; max-width: 400px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3>Manage Holidays</h3>
+                <button class="btn"
+                    onclick="document.getElementById('holiday-modal').style.display = 'none'">Close</button>
+            </div>
+            <div class="table-container" style="max-height: 300px; overflow-y: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="holiday-list-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAYMENT RECORD MODAL -->
+    <div id="payment-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1002; justify-content: center; align-items: center;">
+        <div class="card" style="width: 90%; max-width: 400px;">
+            <h3>Record Salary Payment</h3>
+            <form id="payment-form">
+                <input type="hidden" id="pay-emp-id">
+                <input type="hidden" id="pay-salary-month">
+                <div class="form-group">
+                    <label>Amount (₹)</label>
+                    <input type="number" id="pay-amount" required>
+                </div>
+                <div class="form-group">
+                    <label>Payment Date</label>
+                    <input type="date" id="pay-date" required>
+                </div>
+                <div class="form-group">
+                    <label>Mode</label>
+                    <select id="pay-mode">
+                        <option value="Cash">Cash</option>
+                        <option value="Online">Online/UPI</option>
+                        <option value="Check">Check</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Payment Proof (Screenshot)</label>
+                    <input type="file" id="pay-screenshot" accept="image/*">
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <input type="text" id="pay-notes">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Confirm Payment</button>
+                <button type="button" class="btn btn-block"
+                    style="background: var(--gray); margin-top: 0.5rem; color: white;"
+                    onclick="closePaymentModal()">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- IMAGE GALLERY MODAL -->
+    <div id="gallery-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1003; justify-content: center; align-items: center;">
+        <div class="card"
+            style="width: 95%; max-width: 900px; max-height: 90vh; display: flex; flex-direction: column; padding: 0; overflow: hidden;">
+            <!-- Modal Header -->
+            <div class="gallery-modal-header"
+                style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid var(--gray); background: var(--light); gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 150px;">
+                    <h3 id="gallery-title" style="margin: 0; font-size: 1rem;">📷 Employee Uploads</h3>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                    <input type="date" id="gallery-date-filter" onchange="filterGalleryByDate()"
+                        style="padding: 0.4rem; font-size: 0.85rem; width: auto;">
+                    <button class="btn" onclick="clearGalleryFilter()"
+                        style="padding: 0.4rem 0.75rem; font-size: 0.85rem; width: auto;">Clear</button>
+                    <button class="btn" onclick="closeGalleryModal()"
+                        style="padding: 0.4rem 0.75rem; background: var(--danger); color: white; font-size: 0.85rem; width: auto;">✕
+                        Close</button>
+                </div>
+            </div>
+
+            <!-- Modal Body - Image Grid -->
+            <div style="flex: 1; overflow-y: auto; padding: 1rem;">
+                <div id="gallery-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.75rem;">
+                    <!-- Dynamic Images -->
+                </div>
+                <p id="gallery-empty" style="display: none; text-align: center; color: var(--gray); padding: 2rem;">No
+                    uploads found for this employee.</p>
+            </div>
+
+            <!-- Modal Footer -->
+            <div
+                style="padding: 0.75rem 1rem; border-top: 1px solid var(--gray); background: var(--light); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                <span id="gallery-count" style="color: var(--gray); font-size: 0.9rem;">0 images</span>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button class="btn" onclick="downloadSelectedImages()" id="download-selected-btn"
+                        style="display: none; background: var(--primary); color: white; padding: 0.5rem 1rem; font-size: 0.85rem; width: auto;">⬇️
+                        Download</button>
+                    <button class="btn" onclick="deleteSelectedImages()" id="delete-selected-btn"
+                        style="display: none; background: var(--danger); color: white; padding: 0.5rem 1rem; font-size: 0.85rem; width: auto;">🗑️
+                        Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DELETE CONFIRMATION MODAL -->
+    <div id="delete-confirm-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1004; justify-content: center; align-items: center;">
+        <div class="card" style="width: 90%; max-width: 400px; text-align: center;">
+            <h3 style="color: var(--danger); margin-bottom: 1rem;">⚠️ Confirm Delete</h3>
+            <p id="delete-confirm-msg" style="margin-bottom: 1.5rem;">Are you sure you want to delete the selected
+                image(s)?</p>
+            <p style="font-size: 0.9rem; color: var(--gray); margin-bottom: 1.5rem;">This action cannot be undone.</p>
+            <div style="display: flex; gap: 1rem; justify-content: center;">
+                <button class="btn" onclick="cancelDelete()"
+                    style="background: var(--gray); color: white; padding: 0.75rem 2rem;">Cancel</button>
+                <button class="btn" onclick="confirmDelete()"
+                    style="background: var(--danger); color: white; padding: 0.75rem 2rem;">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- IMAGE PREVIEW OVERLAY -->
+    <div id="image-preview-overlay" class="image-preview-overlay" onclick="closeImagePreview(event)">
+        <div class="image-preview-container" onclick="event.stopPropagation()">
+            <!-- Close button -->
+            <button class="image-preview-close" onclick="closeImagePreview()">✕</button>
+
+            <!-- Navigation: Previous -->
+            <button id="preview-prev" onclick="prevImage()"
+                style="position: absolute; left: -60px; top: 50%; transform: translateY(-50%); background: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">◀</button>
+
+            <!-- Image -->
+            <img id="preview-image" src="" alt="Preview">
+
+            <!-- Navigation: Next -->
+            <button id="preview-next" onclick="nextImage()"
+                style="position: absolute; right: -60px; top: 50%; transform: translateY(-50%); background: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">▶</button>
+
+            <!-- Info + Counter -->
+            <div class="image-preview-info" id="preview-info"></div>
+            <div id="preview-counter" style="position: absolute; top: -40px; left: 0; color: white; font-size: 0.9rem;">
+            </div>
+
+            <!-- Download button -->
+            <button onclick="downloadCurrentImage()"
+                style="position: absolute; top: -40px; left: 50%; transform: translateX(-50%); background: var(--primary); color: white; border: none; padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.3rem;">
+                ⬇ Download
+            </button>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+    <style>
+        /* Responsive Image in Modal */
+        #enhanced-preview-img {
+            max-width: 90vw;
+            max-height: 80vh;
+            object-fit: contain;
+            transition: transform 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+            #enhanced-preview-modal div[style*="position: relative"] {
+                width: 95% !important;
+            }
+        }
+    </style>
+</body>
+
+</html>

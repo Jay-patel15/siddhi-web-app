@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Employee Portal | Siddhi Electricals</title>
+    <!-- <link rel="stylesheet" href="css/employee-portal.css?v=2"> -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --secondary: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --white: #ffffff;
+            --gray: #64748b;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --radius: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+
+        body {
+            background-color: #f1f5f9;
+            color: var(--dark);
+            min-height: 100vh;
+            padding-top: env(safe-area-inset-top, 0);
+            padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 1.5rem;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        /* Modal Style Card */
+        .modal-style-card {
+            padding: 0;
+            overflow: hidden;
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+        }
+
+        .emp-details-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            background: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .emp-name {
+            margin: 0;
+            font-size: 1.25rem;
+            color: var(--dark);
+            font-weight: 700;
+        }
+
+        .emp-meta {
+            font-size: 0.85rem;
+            color: var(--gray);
+            margin-top: 0.25rem;
+            line-height: 1.4;
+        }
+
+        .emp-meta strong {
+            color: var(--dark);
+            font-weight: 600;
+        }
+
+        /* Modal Body */
+        .modal-body-content {
+            padding: 1.5rem;
+        }
+
+        .month-filter-bar {
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: #f8fafc;
+            padding: 1rem;
+            border-radius: 8px;
+            flex-wrap: wrap;
+        }
+
+        .month-filter-bar label {
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .month-filter-bar input {
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.95rem;
+        }
+
+        /* Dashboard Stats Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            padding: 1.25rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        /* Specific Stat Styles match Admin Modal */
+        .present-card {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+        }
+
+        .present-card .stat-title {
+            color: #0369a1;
+        }
+
+        .present-card .stat-value {
+            color: #0ea5e9;
+        }
+
+        .absent-card {
+            background: #fff1f2;
+            border: 1px solid #fecdd3;
+        }
+
+        .absent-card .stat-title {
+            color: #be123c;
+        }
+
+        .absent-card .stat-value {
+            color: #f43f5e;
+        }
+
+        .payable-card {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+        }
+
+        .payable-card .stat-title {
+            color: #047857;
+        }
+
+        .payable-card .stat-value {
+            color: #10b981;
+        }
+
+        /* Section Titles */
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--dark);
+            margin-top: 1.5rem;
+        }
+
+        .section-title:first-of-type {
+            margin-top: 0;
+        }
+
+        /* Table Styles - RESTORED */
+        .table-container.bordered {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        th,
+        td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #475569;
+            font-size: 0.9rem;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        td {
+            font-size: 0.95rem;
+            color: #1e293b;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        /* Mobile Navigation Tabs */
+        .mobile-nav {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-nav {
+                display: flex;
+                background: white;
+                padding: 0.5rem;
+                margin-bottom: 1rem;
+                border-radius: 12px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                position: sticky;
+                top: 70px;
+                /* Adjust based on header height */
+                z-index: 90;
+            }
+
+            .nav-item {
+                flex: 1;
+                text-align: center;
+                padding: 0.75rem 0.5rem;
+                font-size: 0.9rem;
+                font-weight: 500;
+                color: var(--gray);
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+
+            .nav-item.active {
+                background: #e0e7ff;
+                color: var(--primary);
+                font-weight: 600;
+            }
+
+            /* Hide sections by default on mobile, show active one via JS */
+            .mobile-section {
+                display: none;
+            }
+
+            .mobile-section.active {
+                display: block;
+            }
+
+            /* Improve Card Layout for Mobile */
+            .emp-details-header {
+                padding: 1rem;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .modal-body-content {
+                padding: 1rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .month-filter-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .month-filter-bar input {
+                width: 100%;
+            }
+
+            /* Card View for Tables */
+            .table-container.bordered {
+                border: none;
+                max-height: none;
+                overflow-y: visible;
+                background: transparent;
+            }
+
+            table,
+            thead,
+            tbody,
+            th,
+            td,
+            tr {
+                display: block;
+            }
+
+            thead tr {
+                position: absolute;
+                top: -9999px;
+                left: -9999px;
+            }
+
+            tr {
+                border: none;
+                /* Remove border */
+                margin-bottom: 1rem;
+                border-radius: 12px;
+                background: white;
+                padding: 1rem;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                /* Softer shadow */
+                position: relative;
+                /* For absolute positioning of content if needed */
+            }
+
+            td {
+                border: none;
+                border-bottom: 1px solid #f1f5f9;
+                position: relative;
+                padding-left: 0 !important;
+                /* Reset padding */
+                padding-right: 0 !important;
+                text-align: right !important;
+                padding-top: 0.75rem !important;
+                padding-bottom: 0.75rem !important;
+                display: flex;
+                /* Use flexbox for alignment */
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            td:before {
+                position: static;
+                /* Reset absolute positioning */
+                width: auto;
+                padding-right: 0;
+                white-space: nowrap;
+                text-align: left;
+                font-weight: 500;
+                color: var(--gray);
+                content: attr(data-label);
+            }
+
+            td:last-child {
+                border-bottom: none;
+            }
+        }
+
+        /* Image Preview Modal */
+        #preview-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+            backdrop-filter: blur(5px);
+        }
+
+        #preview-modal img {
+            max-width: 100%;
+            max-height: 90vh;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            animation: zoomIn 0.2s ease-out;
+        }
+
+        @keyframes zoomIn {
+            from {
+                transform: scale(0.9);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        #preview-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        #preview-close:hover {
+            background: white;
+            color: black;
+            transform: rotate(90deg);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="assets/logo-horizontal.png" alt="Siddhi Electricals" style="height: 40px; width: auto;">
+            <h1 style="margin: 0;">Siddhi Electricals</h1>
+        </div>
+        <button class="logout-btn" onclick="logout()">🚪 Logout</button>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Single Card Container matching Admin Modal -->
+        <div class="card modal-style-card">
+
+            <!-- Employee Header Details -->
+            <div class="emp-details-header">
+                <div>
+                    <h2 class="emp-name" id="details-emp-name">Loading...</h2>
+                    <div class="emp-meta" id="details-emp-meta">
+                        <!-- ID: 1 | Designation: ele | Daily Salary: ₹800 | Hourly Rate: ₹94.12 -->
+                    </div>
+                </div>
+                <div>
+                    <button class="btn" onclick="downloadPayslipPDF()"
+                        style="background: var(--primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 0.5rem;">
+                        📄 Download Payslip
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scrollable Body Content -->
+            <div class="modal-body-content">
+
+                <!-- Month Filter Bar -->
+                <div class="month-filter-bar">
+                    <label>Select Month:</label>
+                    <input type="month" id="month-filter" onchange="loadData()">
+                </div>
+
+
+
+                <!-- Fixed Stats Layout based on screenshot -->
+                <div class="dashboard-grid">
+                    <div class="stat-card present-card">
+                        <div class="stat-title">Days Present</div>
+                        <div class="stat-value" id="stat-present">0</div>
+                    </div>
+                    <div class="stat-card absent-card">
+                        <div class="stat-title">Absent / Holidays</div>
+                        <div class="stat-value" id="stat-absent">0</div>
+                    </div>
+                    <!-- Previous Balance Card -->
+                    <div class="stat-card" id="card-prev-bal" style="border: 1px solid #e2e8f0;">
+                        <div class="stat-title">Previous Balance</div>
+                        <div class="stat-value" id="stat-prev-bal">₹0</div>
+                    </div>
+                    <div class="stat-card payable-card">
+                        <div class="stat-title">Net Payable</div>
+                        <div class="stat-value" id="stat-net">₹0</div>
+                    </div>
+                    <div class="stat-card" style="background: #fdf4ff; border: 1px solid #f0abfc;">
+                        <div class="stat-title" style="color: #86198f;">Total Hours</div>
+                        <div class="stat-value" id="stat-hours" style="color: #c026d3;">0</div>
+                    </div>
+                    <div class="stat-card" style="background: #fff7ed; border: 1px solid #fed7aa;">
+                        <div class="stat-title" style="color: #9a3412;">Gross Earned</div>
+                        <div class="stat-value" id="stat-gross" style="color: #ea580c;">₹0</div>
+                    </div>
+                </div>
+
+                <!-- Mobile Navigation -->
+                <div class="mobile-nav">
+                    <div class="nav-item active" onclick="switchTab('attendance')">Attendance</div>
+                    <div class="nav-item" onclick="switchTab('advances')">Advances</div>
+                    <div class="nav-item" onclick="switchTab('payments')">Payments</div>
+                </div>
+
+                <!-- Attendance History -->
+                <div id="section-attendance" class="mobile-section active">
+                    <h4 class="section-title">Attendance History</h4>
+                    <div class="table-container bordered">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>In</th>
+                                    <th>Out</th>
+                                    <th>Hours</th>
+                                    <th>Earned</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendance-table">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                        <p id="attendance-empty" class="empty-msg" style="display: none;">No attendance records for this
+                            month.</p>
+                    </div>
+                </div>
+
+                <!-- Advance History -->
+                <div id="section-advances" class="mobile-section">
+                    <h4 class="section-title">Advance History</h4>
+                    <div class="table-container bordered">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Notes</th>
+                                    <th>Proof</th>
+                                </tr>
+                            </thead>
+                            <tbody id="advances-table">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                        <p id="advances-empty" class="empty-msg" style="display: none;">No advances for this month.</p>
+                    </div>
+                </div>
+
+                <!-- Salary Payments -->
+                <div id="section-payments" class="mobile-section">
+                    <h4 class="section-title">Salary Payments</h4>
+                    <div class="table-container bordered">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Mode</th>
+                                    <th>Amount</th>
+                                    <th>Notes</th>
+                                    <th>Proof</th>
+                                </tr>
+                            </thead>
+                            <tbody id="payments-table">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                        <p id="payments-empty" class="empty-msg" style="display: none;">No payments for this month.</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Enhanced Image Preview Modal -->
+    <div id="enhanced-preview-modal" onclick="closeEnhancedPreview()"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 2000; flex-direction: column; justify-content: center; align-items: center; padding: 1rem; backdrop-filter: blur(5px);">
+
+        <button onclick="closeEnhancedPreview()"
+            style="position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.1); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 50%; width: 40px; height: 40px; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">×</button>
+
+        <div style="position: relative; max-width: 100%; display: flex; flex-direction: column; align-items: center;">
+            <img id="enhanced-preview-img" src="" onclick="event.stopPropagation()"
+                style="max-width: 100%; max-height: 80vh; border-radius: 8px; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5); object-fit: contain; transition: transform 0.2s;">
+
+            <div style="margin-top: 1rem; text-align: center; color: white;">
+                <div id="preview-caption-title" style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem;">
+                    Proof</div>
+                <div id="preview-caption-date" style="font-size: 0.9rem; opacity: 0.8; margin-bottom: 1rem;">-</div>
+
+                <button onclick="downloadPreviewImage(); event.stopPropagation();"
+                    style="background: white; color: black; border: none; padding: 0.5rem 1rem; border-radius: 20px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; margin: 0 auto;">
+                    ⬇️ Download Image
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '';
+        let currentEmployee = null;
+        let allData = {
+            employees: [],
+            attendance: [],
+            advances: [],
+            payments: [],
+            settings: {}
+        };
+
+        // Check session on load
+        window.onload = async function () {
+            const session = localStorage.getItem('payroll_session');
+            if (!session) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            const data = JSON.parse(session);
+            if (data.role !== 'employee') {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            // Set default month to current
+            const now = new Date();
+            document.getElementById('month-filter').value = now.toISOString().slice(0, 7);
+
+            // Load employee data
+            await loadEmployeeData(data.employeeId);
+        };
+
+        function switchTab(tabName) {
+            // Only relevant on mobile (handled by CSS media query logic for display, but here we toggle classes)
+            // Update active nav item
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.innerText.toLowerCase().includes(tabName)) {
+                    item.classList.add('active');
+                }
+            });
+
+            // Show active section
+            document.querySelectorAll('.mobile-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById(`section-${tabName}`).classList.add('active');
+        }
+
+        async function loadEmployeeData(employeeId) {
+            try {
+                // Fetch all data
+                const [empRes, attRes, advRes, payRes, setRes] = await Promise.all([
+                    fetch(`${API_URL}/api/employees`),
+                    fetch(`${API_URL}/api/attendance`),
+                    fetch(`${API_URL}/api/advances`),
+                    fetch(`${API_URL}/api/payments`),
+                    fetch(`${API_URL}/api/settings`)
+                ]);
+
+                allData.employees = await empRes.json();
+                allData.attendance = await attRes.json();
+                allData.advances = await advRes.json();
+                allData.payments = await payRes.json();
+                allData.settings = await setRes.json();
+
+                // Find current employee
+                currentEmployee = allData.employees.find(e => String(e.id) === String(employeeId));
+                if (!currentEmployee) {
+                    // Try finding by customId as fallback
+                    currentEmployee = allData.employees.find(e => String(e.customId) === String(employeeId));
+                }
+
+                if (!currentEmployee) {
+                    const availableIds = allData.employees.map(e => e.id).join(', ');
+                    const debugMsg = `Employee [${employeeId}] not found in list. Available IDs: ${availableIds.substring(0, 50)}...`;
+                    console.error(debugMsg);
+                    alert(debugMsg + "\n\nPlease try logging out and logging in again. If this persists, send this screenshot to support.");
+                    // logout(); // Don't auto-logout immediately so user can read message
+                    return;
+                }
+
+                // Update header
+                // document.getElementById('header-emp-name').innerText = currentEmployee.name; // Removed old header
+
+                // Update details header
+                updateHeaderDetails();
+
+                // Load month data
+                loadData();
+
+            } catch (err) {
+                console.error('Error loading data:', err);
+                alert('Error loading data. Please try again.');
+            }
+        }
+
+        function updateHeaderDetails() {
+            document.getElementById('details-emp-name').innerText = currentEmployee.name;
+
+            const salary = currentEmployee.dailySalary || currentEmployee.salary;
+            const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
+            const hourlyRate = (parseFloat(salary) / stdHours).toFixed(2);
+
+            document.getElementById('details-emp-meta').innerHTML = `
+                ID: <strong>${currentEmployee.customId || currentEmployee.id}</strong> | 
+                Designation: <strong>${currentEmployee.designation || 'N/A'}</strong> | 
+                Daily Salary: <strong>₹${salary}</strong> | 
+                Hourly Rate: <strong>₹${hourlyRate}</strong>
+            `;
+        }
+
+        function loadData() {
+            const month = document.getElementById('month-filter').value;
+            console.log('Loading data for month:', month);
+            console.log('Current Employee:', currentEmployee);
+
+            if (!month || !currentEmployee) return;
+
+            // Filter attendance for this employee and month
+            const myAttendance = allData.attendance.filter(a =>
+                a.employeeId === currentEmployee.id && a.date.startsWith(month)
+            ).sort((a, b) => a.date.localeCompare(b.date));
+            console.log('My Attendance:', myAttendance);
+
+            // Filter advances for this employee and month
+            const myAdvances = allData.advances.filter(a =>
+                a.employeeId === currentEmployee.id &&
+                (a.date.startsWith(month) || a.deductionMonth === month)
+            );
+
+            // Filter payments for this employee and month
+            const myPayments = allData.payments.filter(p =>
+                p.employeeId === currentEmployee.id &&
+                (p.date.startsWith(month) || p.salaryMonth === month)
+            );
+
+            // Calculate stats
+            const daysPresent = myAttendance.length;
+
+            const [year, monthNum] = month.split('-');
+            const totalDaysInMonth = new Date(parseInt(year), parseInt(monthNum), 0).getDate();
+
+            const daysAbsent = totalDaysInMonth - daysPresent;
+
+            console.log('Stats:', { daysPresent, totalDaysInMonth, daysAbsent });
+
+            let totalEarned = 0;
+            myAttendance.forEach(att => {
+                totalEarned += calculateDayEarning(att);
+            });
+
+            const totalAdvances = myAdvances
+                .filter(a => a.deductionMonth === month)
+                .reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+
+            const totalPayments = myPayments
+                .filter(p => p.salaryMonth === month)
+                .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+            // --- FETCH PREVIOUS BALANCE FOR PORTAL ---
+            let previousBalance = 0;
+            // logic similar to server: previous = past earnings - past deductions - past payments
+            // Since we have ALL data in `allData`, we can calculate client side easily!
+
+            // 1. Past Earnings
+            const pastAtt = allData.attendance.filter(a => a.employeeId === currentEmployee.id && a.date < `${month}-01`);
+            let pastEarnings = 0;
+            const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
+            const slabHours = (allData.settings && allData.settings.slabHours) ? parseFloat(allData.settings.slabHours) : 6;
+
+            pastAtt.forEach(att => {
+                const wh = parseFloat(att.workedHours);
+                const salary = parseFloat(currentEmployee.salary);
+                const normalRate = salary / stdHours;
+                let dayPay = 0;
+                if (att.slabMode && wh > stdHours) {
+                    const slabRate = salary / slabHours;
+                    dayPay = (normalRate * stdHours) + (slabRate * (wh - stdHours));
+                } else {
+                    dayPay = normalRate * wh;
+                }
+                pastEarnings += dayPay + (parseFloat(att.fare) || 0);
+            });
+
+            // 2. Past Advances
+            const pastAdv = allData.advances.filter(a => {
+                if (a.employeeId !== currentEmployee.id) return false;
+                const dedMonth = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
+                return dedMonth < month;
+            });
+            const pastDeductions = pastAdv.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+
+            // 3. Past Payments
+            const pastPay = allData.payments.filter(p => p.employeeId === currentEmployee.id && p.salaryMonth < month);
+            const pastPaid = pastPay.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+            previousBalance = Math.round(pastEarnings - pastDeductions - pastPaid);
+
+
+            const netPayable = totalEarned - totalAdvances - totalPayments + previousBalance;
+
+            // Update stats
+            document.getElementById('stat-present').innerText = daysPresent;
+            document.getElementById('stat-absent').innerText = daysAbsent;
+
+            // Previous Balance Stat
+            const prevEl = document.getElementById('stat-prev-bal');
+            const prevCard = document.getElementById('card-prev-bal');
+
+            if (previousBalance === 0) {
+                prevEl.innerHTML = '<span style="color:var(--gray)">-</span>';
+                prevCard.style.background = '#f8fafc';
+                prevCard.style.borderColor = '#e2e8f0';
+            } else {
+                const isNeg = previousBalance < 0;
+                const color = isNeg ? '#dc2626' : '#10b981';
+                const bg = isNeg ? '#fef2f2' : '#ecfdf5';
+                const border = isNeg ? '#fecaca' : '#a7f3d0';
+                prevEl.innerHTML = `<span style="color: ${color};">${previousBalance > 0 ? '+' : ''}₹${previousBalance}</span>`;
+                prevCard.style.background = bg;
+                prevCard.style.borderColor = border;
+            }
+
+            document.getElementById('stat-net').innerText = netPayable <= 0 ? 'SETTLED' : `₹${Math.round(netPayable)}`;
+
+            // New Stats
+            let totalHours = 0;
+            myAttendance.forEach(a => totalHours += parseFloat(a.workedHours || a.totalHours || 0));
+            document.getElementById('stat-hours').innerText = totalHours.toFixed(2);
+            document.getElementById('stat-gross').innerText = `₹${totalEarned.toFixed(0)}`;
+
+            // Update tables
+            updateAttendanceTable(myAttendance);
+            updateAdvancesTable(myAdvances);
+            updatePaymentsTable(myPayments);
+        }
+
+        function calculateDayEarning(att) {
+            const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
+            const salary = parseFloat(currentEmployee.dailySalary || currentEmployee.salary || 0);
+
+            if (!salary) return 0;
+
+            const hourlyRate = salary / stdHours;
+            const hours = parseFloat(att.totalHours || att.workedHours || 0);
+            return hours * hourlyRate;
+        }
+
+        function updateAttendanceTable(data) {
+            const tbody = document.getElementById('attendance-table');
+            const empty = document.getElementById('attendance-empty');
+
+            if (data.length === 0) {
+                tbody.innerHTML = '';
+                empty.style.display = 'block';
+                // Force table to show empty state if needed, or hide table container
+                return;
+            }
+
+            empty.style.display = 'none';
+            tbody.innerHTML = data.map(att => {
+                const earned = calculateDayEarning(att);
+                const hours = parseFloat(att.totalHours || att.workedHours || 0);
+                return `
+                    <tr>
+                        <td data-label="Date">${att.date}</td>
+                        <td data-label="In">${att.timeIn || '-'}</td>
+                        <td data-label="Out">${att.timeOut || '-'}</td>
+                        <td data-label="Hours">${hours.toFixed(2)}</td>
+                        <td data-label="Earned">₹${earned.toFixed(0)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateAdvancesTable(data) {
+            const tbody = document.getElementById('advances-table');
+            const empty = document.getElementById('advances-empty');
+
+            if (data.length === 0) {
+                tbody.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+
+            empty.style.display = 'none';
+            tbody.innerHTML = data.map(adv => `
+                    <tr>
+                        <td data-label="Date">${adv.date}</td>
+                        <td data-label="Amount" style="color: var(--danger); font-weight: 600;">₹${adv.amount}</td>
+                        <td data-label="Notes">${adv.notes || '-'}</td>
+                        <td data-label="Other">${adv.screenshot ? `<a href="#" onclick="showPreview('${adv.screenshot}', 'Advance Payment', '${adv.date}', '${adv.amount}'); return false;" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>` : '-'}</td>
+                    </tr>
+                `).join('');
+        }
+
+        function updatePaymentsTable(data) {
+            const tbody = document.getElementById('payments-table');
+            const empty = document.getElementById('payments-empty');
+
+            if (data.length === 0) {
+                tbody.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+
+            empty.style.display = 'none';
+            tbody.innerHTML = data.map(pay => `
+                <tr>
+                    <td data-label="Date">${pay.date}</td>
+                    <td data-label="Mode">${pay.mode || 'Cash'}</td>
+                    <td data-label="Amount" style="color: var(--secondary); font-weight: 600;">₹${pay.amount}</td>
+                    <td data-label="Notes">${pay.notes || '-'}</td>
+                    <td data-label="Proof">${pay.screenshot ? `<a href="#" onclick="showPreview('${pay.screenshot}', 'Salary Payment', '${pay.date}', '${pay.amount}'); return false;" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>` : '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        let currentPreviewScale = 1;
+
+        window.showPreview = function (url, title, date, amount) {
+            const modal = document.getElementById('enhanced-preview-modal');
+            const img = document.getElementById('enhanced-preview-img');
+            const titleEl = document.getElementById('preview-caption-title');
+            const dateEl = document.getElementById('preview-caption-date');
+
+            img.src = url;
+            titleEl.innerText = title || 'Proof';
+            dateEl.innerText = `${date} • ₹${amount}`;
+
+            currentPreviewScale = 1;
+            img.style.transform = `scale(1)`;
+
+            modal.style.display = 'flex';
+        }
+
+        window.closeEnhancedPreview = function () {
+            document.getElementById('enhanced-preview-modal').style.display = 'none';
+        }
+
+        function downloadPreviewImage() {
+            const img = document.getElementById('enhanced-preview-img');
+            const link = document.createElement('a');
+            link.href = img.src;
+            link.download = `Proof_${Date.now()}.jpg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Simple Zoom Logic (Double Tap / Click)
+        document.getElementById('enhanced-preview-img').addEventListener('click', function () {
+            currentPreviewScale = currentPreviewScale === 1 ? 2.5 : 1;
+            this.style.transform = `scale(${currentPreviewScale})`;
+            this.style.cursor = currentPreviewScale === 1 ? 'zoom-in' : 'zoom-out';
+        });
+
+        // --- PDF DOWNLOAD LOGIC ---
+        function convertNumberToWords(amount) {
+            if (amount < 0) return "Negative " + convertNumberToWords(Math.abs(amount));
+            if (amount === 0) return "Zero";
+
+            const words = new Array();
+            words[0] = '';
+            words[1] = 'One';
+            words[2] = 'Two';
+            words[3] = 'Three';
+            words[4] = 'Four';
+            words[5] = 'Five';
+            words[6] = 'Six';
+            words[7] = 'Seven';
+            words[8] = 'Eight';
+            words[9] = 'Nine';
+            words[10] = 'Ten';
+            words[11] = 'Eleven';
+            words[12] = 'Twelve';
+            words[13] = 'Thirteen';
+            words[14] = 'Fourteen';
+            words[15] = 'Fifteen';
+            words[16] = 'Sixteen';
+            words[17] = 'Seventeen';
+            words[18] = 'Eighteen';
+            words[19] = 'Nineteen';
+            words[20] = 'Twenty';
+            words[30] = 'Thirty';
+            words[40] = 'Forty';
+            words[50] = 'Fifty';
+            words[60] = 'Sixty';
+            words[70] = 'Seventy';
+            words[80] = 'Eighty';
+            words[90] = 'Ninety';
+            amount = amount.toString();
+            const atemp = amount.split(".");
+            const number = atemp[0].split(",").join("");
+            const n_length = number.length;
+            let words_string = "";
+            if (n_length <= 9) {
+                const n_array = new Array(0, 0, 0, 0, 0, 0, 0, 0, 0);
+                const received_n_array = new Array();
+                for (let i = 0; i < n_length; i++) {
+                    received_n_array[i] = number.substr(i, 1);
+                }
+                for (let i = 9 - n_length, j = 0; i < 9; i++, j++) {
+                    n_array[i] = received_n_array[j];
+                }
+                for (let i = 0, j = 1; i < 9; i++, j++) {
+                    if (i == 0 || i == 2 || i == 4 || i == 7) {
+                        if (n_array[i] == 1) {
+                            n_array[j] = 10 + parseInt(n_array[j]);
+                            n_array[i] = 0;
+                        }
+                    }
+                }
+                let value = "";
+                for (let i = 0; i < 9; i++) {
+                    if (i == 0 || i == 2 || i == 4 || i == 7) {
+                        value = n_array[i] * 10;
+                    } else {
+                        value = n_array[i];
+                    }
+                    if (value != 0) {
+                        words_string += words[value] + " ";
+                    }
+                    if ((i == 1 && value != 0) || (i == 0 && value != 0 && n_array[i + 1] == 0)) {
+                        words_string += "Crores ";
+                    }
+                    if ((i == 3 && value != 0) || (i == 2 && value != 0 && n_array[i + 1] == 0)) {
+                        words_string += "Lakhs ";
+                    }
+                    if ((i == 5 && value != 0) || (i == 4 && value != 0 && n_array[i + 1] == 0)) {
+                        words_string += "Thousand ";
+                    }
+                    if (i == 6 && value != 0 && (n_array[i + 1] != 0 && n_array[i + 2] != 0)) {
+                        words_string += "Hundred and ";
+                    } else if (i == 6 && value != 0) {
+                        words_string += "Hundred ";
+                    }
+                }
+                words_string = words_string.split("  ").join(" ");
+            }
+            return words_string + " Rupees Only";
+        }
+
+        async function downloadPreviewImage() {
+            const img = document.getElementById('enhanced-preview-img');
+            const url = img.src;
+
+            try {
+                // Fetch as blob to support cross-origin download
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Network response was not ok');
+                const blob = await response.blob();
+                const blobUrl = window.URL.createObjectURL(blob);
+
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = `Proof_${Date.now()}.jpg`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(blobUrl);
+            } catch (error) {
+                console.error('Download failed:', error);
+                // Fallback: Just open in new tab
+                window.open(url, '_blank');
+            }
+        }
+
+        async function downloadPayslipPDF() {
+            try {
+                if (!currentEmployee) return;
+
+                const month = document.getElementById('month-filter').value;
+                if (!month) {
+                    alert("Please select a month first.");
+                    return;
+                }
+
+                // Ensure we have the library
+                if (!window.jspdf) {
+                    alert("PDF Library not loaded. Please ensure you are online.");
+                    return;
+                }
+
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                const emp = currentEmployee;
+
+                // --- 1. DATA CALCULATION ---
+                // Filter attendance for this employee and month
+                const att = allData.attendance.filter(a =>
+                    a.employeeId === currentEmployee.id && a.date.startsWith(month)
+                );
+
+                // Filter advances for this employee and month
+                const adv = allData.advances.filter(a =>
+                    a.employeeId === currentEmployee.id &&
+                    (a.date.startsWith(month) || a.deductionMonth === month)
+                );
+
+                // Filter payments for this employee and month
+                const payments = allData.payments.filter(p =>
+                    p.employeeId === currentEmployee.id &&
+                    (p.date.startsWith(month) || p.salaryMonth === month)
+                );
+
+                // --- PREVIOUS BALANCE FIX ---
+                // Calculate previous balance correctly for PDF too
+                const pastAtt = allData.attendance.filter(a => a.employeeId === currentEmployee.id && a.date < `${month}-01`);
+                let pastEarnings = 0;
+                const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
+                const slabHours = (allData.settings && allData.settings.slabHours) ? parseFloat(allData.settings.slabHours) : 6;
+                const salary = parseFloat(emp.dailySalary || emp.salary || 0);
+                const normalHourlyRate = salary / stdHours;
+                const slabHourlyRate = salary / slabHours;
+
+                pastAtt.forEach(at => {
+                    const wh = parseFloat(at.workedHours);
+                    let dayPay = 0;
+                    if (at.slabMode && wh > stdHours) {
+                        dayPay = (normalHourlyRate * stdHours) + (slabHourlyRate * (wh - stdHours));
+                    } else {
+                        dayPay = normalHourlyRate * wh;
+                    }
+                    pastEarnings += dayPay + (parseFloat(at.fare) || 0);
+                });
+
+                const pastAdv = allData.advances.filter(a => {
+                    if (a.employeeId !== currentEmployee.id) return false;
+                    const dedMonth = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
+                    return dedMonth < month;
+                });
+                const pastDeductions = pastAdv.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+
+                const pastPay = allData.payments.filter(p => p.employeeId === currentEmployee.id && p.salaryMonth < month);
+                const pastPaid = pastPay.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+                const previousBalance = Math.round(pastEarnings - pastDeductions - pastPaid);
+                // ---------------------------
+
+                let basicPay = 0;
+                let otPay = 0;
+                let totalHours = 0;
+                let totalFare = 0;
+
+                att.forEach(a => {
+                    const wh = parseFloat(a.workedHours || a.totalHours || 0);
+                    totalHours += wh;
+                    totalFare += parseFloat(a.fare || 0);
+
+                    if (a.slabMode && wh > stdHours) {
+                        const normalPart = normalHourlyRate * stdHours;
+                        const extraPart = slabHourlyRate * (wh - stdHours);
+                        basicPay += normalPart;
+                        otPay += extraPart;
+                    } else {
+                        basicPay += normalHourlyRate * wh;
+                    }
+                });
+
+                const totalEarned = basicPay + otPay + totalFare;
+                const totalAdv = adv.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+                const totalPaid = payments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+                const netPayable = totalEarned - totalAdv + previousBalance; // Include Previous Balance
+                const remainingDue = netPayable - totalPaid;
+
+                const amountInWords = convertNumberToWords(Math.round(Math.max(0, netPayable))); // Only positive relevant for slips usually
+                const presentDays = att.length;
+
+
+                // --- 2. HEADER & LOGO ---
+                try {
+                    const wImg = new Image();
+                    wImg.src = 'assets/logo-vertical.jpg';
+                    await new Promise((resolve) => {
+                        wImg.onload = resolve;
+                        wImg.onerror = resolve; // Continue even if load fails
+                        // Set timeout
+                        setTimeout(resolve, 500);
+                    });
+
+                    if (wImg.complete && wImg.naturalHeight !== 0) {
+                        doc.saveGraphicsState();
+                        doc.setGState(new doc.GState({ opacity: 0.15 }));
+                        doc.addImage(wImg, 'JPEG', 35, 80, 140, 120);
+                        doc.restoreGraphicsState();
+                    }
+                } catch (e) {
+                    console.warn("Watermark Logo failed", e);
+                }
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(18);
+                doc.text("SIDDHI ELECTRICALS", 105, 20, null, null, "center");
+
+                doc.setFontSize(12);
+                doc.setFont("helvetica", "normal");
+                doc.text(`Salary Slip for the Month: ${month}`, 105, 28, null, null, "center");
+
+                doc.line(14, 32, 196, 32);
+
+                // --- 3. EMPLOYEE DETAILS ---
+                doc.setFontSize(10);
+                const leftX = 14;
+                const rightX = 140;
+                let currentY = 45;
+
+                // Row 1
+                doc.setFont("helvetica", "bold"); doc.text("Employee Name:", leftX, currentY);
+                doc.setFont("helvetica", "normal"); doc.text(emp.name, leftX + 35, currentY);
+
+                doc.setFont("helvetica", "bold"); doc.text("Employee ID:", rightX, currentY);
+                const displayId = emp.customId ? emp.customId : String(emp.id).substring(0, 6);
+                doc.setFont("helvetica", "normal"); doc.text(displayId, rightX + 25, currentY);
+
+                currentY += 6;
+
+                // Row 2
+                doc.setFont("helvetica", "bold"); doc.text("Designation:", leftX, currentY);
+                const displayDesignation = emp.designation ? emp.designation : "Electrician/Helper";
+                doc.setFont("helvetica", "normal"); doc.text(displayDesignation, leftX + 35, currentY);
+
+                doc.setFont("helvetica", "bold"); doc.text("Days Present:", rightX, currentY);
+                doc.setFont("helvetica", "normal"); doc.text(String(presentDays), rightX + 25, currentY);
+
+                currentY += 6;
+
+                // Row 3
+                doc.setFont("helvetica", "bold"); doc.text("Daily Salary:", leftX, currentY);
+                doc.setFont("helvetica", "normal"); doc.text(`Rs. ${salary}`, leftX + 35, currentY);
+
+                doc.setFont("helvetica", "bold"); doc.text("Hourly Rate:", rightX, currentY);
+                doc.setFont("helvetica", "normal"); doc.text(`Rs. ${normalHourlyRate.toFixed(2)}`, rightX + 25, currentY);
+
+                currentY += 6;
+
+                // Row 4
+                doc.setFont("helvetica", "bold"); doc.text("Total Hours:", leftX, currentY);
+                doc.setFont("helvetica", "normal"); doc.text(`${totalHours.toFixed(2)} hrs`, leftX + 35, currentY);
+
+                doc.line(14, 66, 196, 66);
+
+                // --- 4. EARNINGS & DEDUCTIONS TABLE ---
+                const tableY = 75;
+                doc.setFontSize(10);
+
+                const earningsRows = 3; // Basic, OT, Fare
+                const deductionRows = Math.max(1, adv.length);
+                const maxRows = Math.max(earningsRows, deductionRows);
+                const rowHeight = 8;
+                const headerHeight = 8;
+                const paddingBottom = 6;
+                const tableHeight = headerHeight + (maxRows * rowHeight) + paddingBottom;
+
+                // Headers
+                doc.setFillColor(240, 240, 240);
+                doc.rect(14, tableY, 91, headerHeight, 'F');
+                doc.rect(105, tableY, 91, headerHeight, 'F');
+
+                doc.setFont("helvetica", "bold");
+                doc.text("EARNINGS", 18, tableY + 6);
+                doc.text("AMOUNT", 95, tableY + 6, null, null, "right");
+                doc.text("DEDUCTIONS", 109, tableY + 6);
+                doc.text("AMOUNT", 186, tableY + 6, null, null, "right");
+
+                // Content
+                let contentY = tableY + 14;
+                doc.setFont("helvetica", "normal");
+
+                // Earnings (Fixed)
+                doc.text("Basic Salary", 18, contentY);
+                doc.text(basicPay.toFixed(2), 95, contentY, null, null, "right");
+
+                doc.text("Overtime", 18, contentY + 8);
+                doc.text(otPay.toFixed(2), 95, contentY + 8, null, null, "right");
+
+                doc.text("Travel / Fare", 18, contentY + 16);
+                doc.text(totalFare.toFixed(2), 95, contentY + 16, null, null, "right");
+
+                // Deductions
+                let dedY = contentY;
+                if (adv.length > 0) {
+                    adv.forEach(a => {
+                        const d = a.date.split('-');
+                        doc.text(`Adv (${d[2]}/${d[1]})`, 109, dedY);
+                        doc.text(parseFloat(a.amount).toFixed(2), 186, dedY, null, null, "right");
+                        dedY += 8;
+                    });
+                } else {
+                    doc.text("No Deductions", 109, dedY);
+                }
+
+                doc.rect(14, tableY, 91, tableHeight);
+                doc.rect(105, tableY, 91, tableHeight);
+
+                // Totals Row
+                const totalY = tableY + tableHeight;
+                doc.setFont("helvetica", "bold");
+                doc.rect(14, totalY, 91, 10);
+                doc.text("Total Earnings", 18, totalY + 7);
+                doc.text(`Rs. ${Math.round(totalEarned)}`, 95, totalY + 7, null, null, "right");
+
+                doc.rect(105, totalY, 91, 10);
+                doc.text("Total Deductions", 109, totalY + 7);
+                doc.text(`Rs. ${totalAdv.toFixed(2)}`, 186, totalY + 7, null, null, "right");
+
+
+                // --- 5. NET PAYABLE & PREVIOUS BALANCE ---
+                const summaryY = totalY + 15;
+                let runningY = summaryY;
+
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "bold");
+
+                // Show Previous Balance if exists
+                if (Math.abs(previousBalance) > 0) {
+                    doc.text("Previous Balance:", 14, runningY);
+                    doc.setFontSize(12);
+                    const prevColor = previousBalance < 0 ? [220, 38, 38] : [16, 185, 129];
+                    doc.setTextColor(prevColor[0], prevColor[1], prevColor[2]);
+                    doc.text(`Rs. ${previousBalance}`, 105, runningY);
+                    doc.setTextColor(0, 0, 0);
+                    runningY += 8;
+                }
+
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "bold");
+                doc.text("Net Payable (Current + Previous):", 14, runningY);
+                doc.setFontSize(13);
+                doc.text(`Rs. ${Math.round(netPayable)}`, 105, runningY);
+
+                // Payments
+                let paymentY = runningY + 10;
+                if (payments.length > 0) {
+                    doc.setFontSize(10);
+                    doc.setFont("helvetica", "bold");
+                    doc.text("Less: Salary Payments:", 14, paymentY);
+                    doc.setFont("helvetica", "normal");
+
+                    payments.forEach(p => {
+                        const payDetail = `Paid (${p.date.split('-').reverse().slice(0, 2).join('/')}) [${p.mode || 'Cash'}]`;
+                        doc.text(payDetail, 60, paymentY);
+                        doc.text(`(-) Rs. ${parseFloat(p.amount).toFixed(2)}`, 140, paymentY, null, null, "right");
+                        paymentY += 6;
+                    });
+
+                    doc.setLineWidth(0.5);
+                    doc.line(14, paymentY + 2, 140, paymentY + 2);
+                    paymentY += 8;
+
+                    doc.setFont("helvetica", "bold");
+                    doc.text("Net Balance Due:", 14, paymentY);
+
+                    let finalDue = remainingDue;
+                    if (Math.abs(finalDue) < 1) finalDue = 0;
+                    else finalDue = Math.round(finalDue);
+
+                    doc.setFontSize(14);
+                    const dueColor = finalDue <= 0 ? [16, 185, 129] : [220, 38, 38];
+                    doc.setTextColor(dueColor[0], dueColor[1], dueColor[2]);
+                    doc.text(`Rs. ${finalDue}`, 140, paymentY, null, null, "right");
+                    doc.setTextColor(0, 0, 0);
+                } else {
+                    doc.setFont("helvetica", "bold");
+                    doc.text("Net Balance Due:", 14, paymentY);
+                    doc.setFontSize(14);
+                    const balColor = netPayable <= 0 ? [16, 185, 129] : [220, 38, 38];
+                    doc.setTextColor(balColor[0], balColor[1], balColor[2]);
+                    doc.text(`Rs. ${Math.round(netPayable)}`, 140, paymentY, null, null, "right");
+                    doc.setTextColor(0, 0, 0);
+                }
+
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "italic");
+                doc.text(`Amount in Words: ${amountInWords}`, 14, paymentY + 12);
+
+                const finalY = paymentY + 35;
+                doc.setFont("helvetica", "normal");
+                doc.line(14, finalY, 60, finalY);
+                doc.text("Employee Signature", 20, finalY + 5);
+                doc.line(140, finalY, 190, finalY);
+                doc.text("Authorized Signatory", 145, finalY + 5);
+
+                doc.setFontSize(8);
+                doc.text("This is a computer-generated payslip.", 105, finalY + 20, null, null, "center");
+
+                // --- STAMP (If settled) ---
+                if (remainingDue <= 0.5) {
+                    const lastPayDate = payments.length > 0 ? payments.sort((a, b) => new Date(b.date) - new Date(a.date))[0].date : '';
+                    const formattedDate = lastPayDate ? lastPayDate.split('-').reverse().join('/') : '';
+
+                    doc.setFontSize(12);
+                    doc.setTextColor(16, 185, 129); // Green
+                    doc.setFont("helvetica", "bold");
+                    doc.text(`Status: SETTLED on ${formattedDate}`, 14, paymentY + 22);
+
+                    // VISUAL STAMP
+                    doc.saveGraphicsState();
+                    doc.setGState(new doc.GState({ opacity: 0.4 }));
+                    doc.setTextColor(16, 185, 129);
+                    doc.setDrawColor(16, 185, 129);
+                    doc.setFontSize(30);
+
+                    const sX = 150;
+                    const sY = summaryY + 15;
+
+                    doc.text("PAID", sX, sY, { angle: -15 });
+                    doc.restoreGraphicsState();
+                }
+
+                doc.save(`Payslip_${emp.name}_${month}.pdf`);
+
+            } catch (err) {
+                console.error("PDF Generate Error:", err);
+                alert("Error generating PDF: " + err.message);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('payroll_session');
+            window.location.href = 'login.html';
+        }
+    </script>
+</body>
+
+</html>

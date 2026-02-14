@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Login | Siddhi Electricals</title>
+    <link rel="stylesheet" href="css/login.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <img src="assets/logo-vertical.jpg" alt="Siddhi Electricals"
+                style="height: 80px; width: auto; margin-bottom: 1rem; border-radius: 10px;">
+        </div>
+
+        <!-- Login Type Selector -->
+        <div class="login-type-selector">
+            <span id="login-type-text" style="font-weight: 600; color: var(--dark); font-size: 1.1rem;">👷 Employee
+                Login</span>
+            <button type="button" class="switch-btn" onclick="toggleLoginType()">Switch to Admin Login</button>
+        </div>
+
+        <!-- Error Message -->
+        <div id="error-msg" class="error-msg"></div>
+
+        <!-- Admin Login Form (hidden by default) -->
+        <form id="admin-form" style="display: none;" onsubmit="handleAdminLogin(event)">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="admin-username" placeholder="Enter admin username" required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="admin-password" placeholder="Enter password" required>
+            </div>
+            <button type="submit" class="btn btn-admin">
+                Login as Admin
+            </button>
+        </form>
+
+        <!-- Employee Login Form (shown by default) -->
+        <form id="employee-form" onsubmit="handleEmployeeLogin(event)">
+            <div class="form-group">
+                <label>Employee Name</label>
+                <input type="text" id="emp-login-name" placeholder="Enter your name" required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="emp-password" placeholder="Enter password given by admin" required>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                Login as Employee
+            </button>
+        </form>
+
+        <div class="footer-text">
+            Secure login portal
+        </div>
+    </div>
+
+    <script>
+        // Always return to Employee Login default
+        let currentLoginType = 'employee';
+
+        // Check if already logged in
+        window.onload = function () {
+            const session = localStorage.getItem('payroll_session');
+            if (session) {
+                const data = JSON.parse(session);
+                if (data.role === 'admin') {
+                    window.location.href = 'index.html';
+                } else if (data.role === 'employee') {
+                    window.location.href = 'employee-portal.html';
+                }
+            }
+
+            // Ensure UI is in sync with default 'employee' state
+            showEmployeeLogin();
+        };
+
+        function toggleLoginType() {
+            if (currentLoginType === 'employee') {
+                showAdminLogin();
+            } else {
+                showEmployeeLogin();
+            }
+        }
+
+        function showAdminLogin() {
+            currentLoginType = 'admin';
+            document.getElementById('admin-form').style.display = 'block';
+            document.getElementById('employee-form').style.display = 'none';
+            document.getElementById('login-type-text').innerHTML = '🔐 Admin Login';
+            document.querySelector('.switch-btn').innerText = 'Switch to Employee Login';
+            hideError();
+        }
+
+        function showEmployeeLogin() {
+            currentLoginType = 'employee';
+            document.getElementById('admin-form').style.display = 'none';
+            document.getElementById('employee-form').style.display = 'block';
+            document.getElementById('login-type-text').innerHTML = '👷 Employee Login';
+            document.querySelector('.switch-btn').innerText = 'Switch to Admin Login';
+            hideError();
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('error-msg');
+            el.innerText = msg;
+            el.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error-msg').style.display = 'none';
+        }
+
+        async function handleAdminLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('admin-username').value;
+            const password = document.getElementById('admin-password').value;
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'admin', username, password })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    localStorage.setItem('payroll_session', JSON.stringify({
+                        role: 'admin',
+                        username: username,
+                        timestamp: Date.now()
+                    }));
+                    window.location.href = 'index.html';
+                } else {
+                    showError(data.message || 'Invalid credentials');
+                }
+            } catch (err) {
+                showError('Login failed. Please try again.');
+            }
+        }
+
+        async function handleEmployeeLogin(e) {
+            e.preventDefault();
+            const empName = document.getElementById('emp-login-name').value;
+            const password = document.getElementById('emp-password').value;
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'employee', empName, password })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    localStorage.setItem('payroll_session', JSON.stringify({
+                        role: 'employee',
+                        employeeId: data.id,
+                        employeeName: data.name,
+                        timestamp: Date.now()
+                    }));
+                    window.location.href = 'employee-portal.html';
+                } else {
+                    showError(data.message || 'Invalid credentials');
+                }
+            } catch (err) {
+                showError('Login failed. Please try again.');
+            }
+        }
+    </script>
+</body>
+
+</html>
