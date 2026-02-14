@@ -20,8 +20,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '15012002J^aya';
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('public'));
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Multer Storage (Memory for Cloud Upload)
 const storage = multer.memoryStorage();
@@ -554,7 +553,12 @@ app.delete('/api/factory-reset', async (req, res) => {
     }
 });
 
-// Start Server
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-});
+// Start Server (only when not imported by Vercel)
+if (process.env.VERCEL !== '1') {
+    app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+    });
+}
+
+// Export for Vercel Serverless
+module.exports = app;
