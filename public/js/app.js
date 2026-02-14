@@ -511,6 +511,8 @@ async function downloadPayslipPDF() {
         let basicPay = 0;
         let otPay = 0;
         let totalHours = 0;
+        let totalNormalHours = 0;
+        let totalOTHours = 0;
         let totalFare = 0;
 
         const normalHourlyRate = emp.salary / globalSettings.standardHours;
@@ -527,9 +529,12 @@ async function downloadPayslipPDF() {
                 const extraPart = slabHourlyRate * (wh - globalSettings.standardHours);
                 basicPay += normalPart;
                 otPay += extraPart;
+                totalNormalHours += globalSettings.standardHours;
+                totalOTHours += (wh - globalSettings.standardHours);
             } else {
                 // All hours are at normal rate
                 basicPay += normalHourlyRate * wh;
+                totalNormalHours += wh;
             }
         });
 
@@ -616,7 +621,7 @@ async function downloadPayslipPDF() {
 
         currentY += 6;
 
-        // Row 3 (Rates)
+        // Row 3
         doc.setFont("helvetica", "bold"); doc.text("Daily Salary:", leftX, currentY);
         doc.setFont("helvetica", "normal"); doc.text(`Rs. ${emp.salary}`, leftX + 35, currentY);
 
@@ -625,11 +630,20 @@ async function downloadPayslipPDF() {
 
         currentY += 6;
 
-        // Row 4 (Total Hours)
+        // Row 4
+        doc.setFont("helvetica", "bold"); doc.text("Normal Hours:", leftX, currentY);
+        doc.setFont("helvetica", "normal"); doc.text(`${totalNormalHours.toFixed(2)} hrs`, leftX + 35, currentY);
+
+        doc.setFont("helvetica", "bold"); doc.text("OT Hours:", rightX, currentY);
+        doc.setFont("helvetica", "normal"); doc.text(`${totalOTHours.toFixed(2)} hrs`, rightX + 25, currentY);
+
+        currentY += 6;
+
+        // Row 5
         doc.setFont("helvetica", "bold"); doc.text("Total Hours:", leftX, currentY);
         doc.setFont("helvetica", "normal"); doc.text(`${totalHours.toFixed(2)} hrs`, leftX + 35, currentY);
 
-        doc.line(14, 66, 196, 66);
+        doc.line(14, currentY + 4, 196, currentY + 4);
 
         // --- 4. EARNINGS & DEDUCTIONS TABLE ---
         const tableY = 75;
@@ -1925,7 +1939,7 @@ async function loadUploadsPage() {
             fetch(`${API_URL}/uploads`)
         ]);
 
-        const employees = await empRes.json();
+        const employees = (await empRes.json()).sort((a, b) => a.name.localeCompare(b.name));
         const uploads = await uploadRes.json();
         uploadsData = uploads;
 
