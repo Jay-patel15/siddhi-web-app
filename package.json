@@ -1,18 +1,13 @@
 {
-  "name": "att-2",
+  "name": "siddhi-electricals",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
   "engines": {
     "node": "20.x"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
     "body-parser": "^2.2.2",
