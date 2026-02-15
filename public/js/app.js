@@ -238,39 +238,34 @@ async function loadDashboard() {
         return dedMonth === currentMonth;
     }).reduce((sum, a) => sum + a.amount, 0);
 
-    // Calculate Total Pending Dues (Global)
-    let totalPendingDues = 0;
-    employeesData.forEach(emp => {
-        // 1. Total Earned (All Time)
-        const empAtt = attendanceData.filter(a => a.employeeId === emp.id);
-        let empEarned = 0;
-        empAtt.forEach(att => {
-            const wh = parseFloat(att.workedHours);
-            const sal = parseFloat(emp.salary);
-            const hourly = sal / globalSettings.standardHours;
-            const slabHourly = sal / globalSettings.slabHours;
+    // Calculate Total Pending Dues (Monthly Net Payable)
+    // Formula per user request: Total Payroll (Month) - Total Advances (Month)
+    // Note: This effectively shows "Net Salary Payable" for the month.
+    let totalPendingDues = totalPayroll - totalAdvances;
 
-            if (att.slabMode && wh > globalSettings.standardHours) {
-                empEarned += (hourly * globalSettings.standardHours) + (slabHourly * (wh - globalSettings.standardHours));
-            } else {
-                empEarned += hourly * wh;
-            }
-            empEarned += (parseFloat(att.fare) || 0);
-        });
+    // Also subtract payments made this month to show meaningful "Pending" (Remaining) amount?
+    // User specifically asked for "subtraction of Total Payroll (January)-Total Advances (January)".
+    // So distinct Payroll - Advances is the base request. 
+    // However, usually "Pending" implies unpaid. Let's start with their formula.
+    // To be safe, I'll calculate it as Net Payable for the month.
 
-        // 2. Total Advances (All Time)
-        const empAdv = advancesData.filter(a => a.employeeId === emp.id).reduce((sum, a) => sum + a.amount, 0);
+    // If we want "True Pending" (unpaid), we should also subtract payments.
+    // const totalPaymentsMonth = paymentsData.filter(p => p.salaryMonth === currentMonth).reduce((sum, p) => sum + p.amount, 0);
+    // totalPendingDues -= totalPaymentsMonth;
 
-        // 3. Total Payments (All Time)
-        const empPay = paymentsData.filter(p => p.employeeId === emp.id).reduce((sum, p) => sum + p.amount, 0);
-
-        // 4. Balance
-        const pending = empEarned - empAdv - empPay;
-        if (pending > 0) totalPendingDues += pending;
-    });
+    // BUT the user said "its adding both", implying they want the difference strictly. I will assume they mean Net Payable.
+    // If they want 'Remaining Dues', they would ask to subtract payments.
+    // I will stick to: Payroll - Advances.
 
     document.getElementById('dash-curr-payroll').innerText = '₹' + Math.round(totalPayroll).toLocaleString();
+
+    // Update Pending Dues Label to show Month
+    const pendingLabel = document.getElementById('dash-pending-dues').previousElementSibling;
+    if (pendingLabel) {
+        pendingLabel.innerText = `Total Net Payable (${new Date(filterMonth + '-01').toLocaleString('default', { month: 'long' })})`;
+    }
     document.getElementById('dash-pending-dues').innerText = '₹' + Math.round(totalPendingDues).toLocaleString();
+
     document.getElementById('dash-advances').innerText = '₹' + Math.round(totalAdvances).toLocaleString();
 
     // 3. Render Employee Cards
