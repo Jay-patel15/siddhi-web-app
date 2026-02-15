@@ -349,7 +349,23 @@
 
             <!-- Advance List -->
             <div class="card">
-                <h3>Advance History</h3>
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+                    <h3>Advance History</h3>
+                    <div class="filter-group" style="flex-wrap: wrap;">
+                        <div class="filter-item">
+                            <label for="adv-filter-month" class="filter-label">Filter by Month:</label>
+                            <input type="month" id="adv-filter-month" onchange="loadAdvanceTable()"
+                                class="filter-input">
+                        </div>
+                        <div class="filter-item">
+                            <label for="adv-filter-employee" class="filter-label">Employee:</label>
+                            <select id="adv-filter-employee" onchange="loadAdvanceTable()" class="filter-input">
+                                <option value="">All Employees</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
                 <div class="table-container">
                     <table>
                         <thead>

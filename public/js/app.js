@@ -1,5 +1,18 @@
 const API_URL = '/api';
 
+// ==================== UTILS ====================
+function formatTimeTo12h(timeStr) {
+    if (!timeStr) return '-';
+    const [hours, minutes] = timeStr.split(':');
+    let h = parseInt(hours);
+    const m = minutes;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12; // the hour '0' should be '12'
+    return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
+}
+
+
 // ==================== DARK MODE ====================
 function initDarkMode() {
     const isDark = localStorage.getItem('darkMode') === 'true';
@@ -965,8 +978,8 @@ async function updateModalData() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${a.date} ${holidays.includes(a.date) ? '<span style="color:var(--danger)">(H)</span>' : ''}</td>
-            <td>${a.timeIn}</td>
-            <td>${a.timeOut}</td>
+            <td>${formatTimeTo12h(a.timeIn)}</td>
+            <td>${formatTimeTo12h(a.timeOut)}</td>
             <td>${wh.toFixed(2)}${otLabel}</td>
             <td>₹${Math.round(dayPay)}</td>
         `;
@@ -1326,8 +1339,8 @@ async function loadAttendanceTable() {
         tr.innerHTML = `
             <td>${att.date}</td>
             <td>${empName}</td>
-            <td>${att.timeIn}</td>
-            <td>${att.timeOut}</td>
+            <td>${formatTimeTo12h(att.timeIn)}</td>
+            <td>${formatTimeTo12h(att.timeOut)}</td>
             <td>${workedHours.toFixed(2)}h
                 ${att.slabMode && workedHours > globalSettings.standardHours ? '<span style="color:var(--warning); font-size: 0.8em"> (OT)</span>' : ''}
             </td>
@@ -1428,10 +1441,21 @@ document.getElementById('attendance-form').addEventListener('submit', async (e) 
     e.preventDefault();
     const workedHours = calculatePreview();
     const id = document.getElementById('att-id').value;
+    const date = document.getElementById('att-date').value;
+    const employeeId = document.getElementById('att-employee').value;
+
+    // Duplicate Check (only for new entries)
+    if (!id) {
+        const isDuplicate = attendanceData.some(a => a.employeeId == employeeId && a.date === date);
+        if (isDuplicate) {
+            alert(`Attendance already marked for this employee on ${date}.`);
+            return;
+        }
+    }
 
     const data = {
-        date: document.getElementById('att-date').value,
-        employeeId: document.getElementById('att-employee').value,
+        date: date,
+        employeeId: employeeId,
         employeeName: document.getElementById('att-employee').selectedOptions[0].text,
         slabMode: document.getElementById('att-slab-mode').checked,
         timeIn: document.getElementById('att-time-in').value,
@@ -1457,6 +1481,7 @@ document.getElementById('attendance-form').addEventListener('submit', async (e) 
     }
     resetAttendanceForm();
     loadAttendanceTable();
+    loadDashboard();
 });
 
 // --- ADVANCES ---
@@ -1465,16 +1490,33 @@ async function loadAdvanceForm() {
     const employees = await res.json();
 
     const select = document.getElementById('adv-employee');
+    const filterSelect = document.getElementById('adv-filter-employee');
     const currentVal = select.value;
+    const currentFilterVal = filterSelect ? filterSelect.value : '';
+
     select.innerHTML = '<option value="">Select Employee</option>';
+    if (filterSelect) {
+        filterSelect.innerHTML = '<option value="">All Employees</option>';
+    }
+
+    employees.sort((a, b) => a.name.localeCompare(b.name));
+
     employees.forEach(emp => {
         const opt = document.createElement('option');
         opt.value = emp.id;
         opt.textContent = emp.name;
         select.appendChild(opt);
+
+        if (filterSelect) {
+            const fOpt = document.createElement('option');
+            fOpt.value = emp.id;
+            fOpt.innerText = emp.name;
+            filterSelect.appendChild(fOpt);
+        }
     });
 
     if (currentVal) select.value = currentVal;
+    if (filterSelect && currentFilterVal) filterSelect.value = currentFilterVal;
 
     // Defaults
     if (!document.getElementById('adv-date').value) {
@@ -1490,6 +1532,9 @@ async function loadAdvanceForm() {
 }
 
 async function loadAdvanceTable() {
+    let monthFilter = document.getElementById('adv-filter-month').value;
+    const empFilter = document.getElementById('adv-filter-employee') ? document.getElementById('adv-filter-employee').value : '';
+
     const [advRes, empRes] = await Promise.all([
         fetch(`${API_URL}/advances`),
         fetch(`${API_URL}/employees`)
@@ -1498,8 +1543,13 @@ async function loadAdvanceTable() {
     const employees = await empRes.json();
     const empMap = Object.fromEntries(employees.map(e => [e.id, e]));
 
+    // Filter Logic
+    const filtered = advancesData
+        .filter(a => !monthFilter || (a.deductionMonth || a.date.substring(0, 7)) === monthFilter)
+        .filter(a => !empFilter || a.employeeId == empFilter);
+
     // Sort desc by date
-    const sorted = advancesData.sort((a, b) => new Date(b.date) - new Date(a.date));
+    const sorted = filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const tbody = document.getElementById('advance-table-body');
     tbody.innerHTML = '';

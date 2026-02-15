@@ -1027,6 +1027,18 @@
             }
         })();
 
+        // --- UTILS ---
+        function formatTimeTo12h(timeStr) {
+            if (!timeStr) return '-';
+            const [hours, minutes] = timeStr.split(':');
+            let h = parseInt(hours);
+            const m = minutes;
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12;
+            h = h ? h : 12;
+            return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
+        }
+
         const API_URL = '';
         let currentEmployee = null;
         let allData = {
@@ -1354,8 +1366,8 @@
                 return `
                     <tr>
                         <td data-label="Date">${att.date}</td>
-                        <td data-label="In">${att.timeIn || '-'}</td>
-                        <td data-label="Out">${att.timeOut || '-'}</td>
+                        <td data-label="In">${formatTimeTo12h(att.timeIn)}</td>
+                        <td data-label="Out">${formatTimeTo12h(att.timeOut)}</td>
                         <td data-label="Hours">${hours.toFixed(2)}${otLabel}</td>
                         <td data-label="Earned">₹${earned.toFixed(0)}</td>
                     </tr>
