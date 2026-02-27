@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Siddhi Electricals | Payroll System</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
@@ -29,6 +30,7 @@
             <li class="nav-item" onclick="showSection('advance')">💲 Advance Payments</li>
             <li class="nav-item" onclick="showSection('payroll')">📄 Payroll</li>
             <li class="nav-item" onclick="showSection('uploads')">📷 Uploads</li>
+            <li class="nav-item" onclick="showSection('attPhotos')">📸 Att. Photos</li>
         </ul>
         <div class="nav-settings">
             <li class="nav-item" onclick="showSection('settings')">⚙️ Settings</li>
@@ -253,9 +255,10 @@
 
             <!-- Attendance List -->
             <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
                     <h3>Attendance Records</h3>
-                    <div class="filter-group">
+                    <div class="filter-group" style="flex-wrap: wrap;">
                         <div class="filter-item">
                             <label for="att-filter-month" class="filter-label">Filter by Month:</label>
                             <input type="month" id="att-filter-month" onchange="loadAttendanceTable()"
@@ -276,7 +279,9 @@
                                 <th>Date</th>
                                 <th>Employee</th>
                                 <th>Time In</th>
+                                <th>In Links</th>
                                 <th>Time Out</th>
+                                <th>Out Links</th>
                                 <th>Hours</th>
                                 <th>Mode</th>
                                 <th>Salary (Est.)</th>
@@ -483,7 +488,37 @@
 
         </section>
 
+        <!-- ATT. PHOTOS SECTION -->
+        <section id="attPhotos" class="section">
+            <div class="card">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
+                    <h3>📸 Attendance Photos</h3>
+                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                        <label style="margin: 0;">Filter:</label>
+                        <input type="month" id="att-photo-month-filter" onchange="loadAttendancePhotos()"
+                            style="padding: 0.4rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.9rem;">
+                        <select id="att-photo-emp-filter" onchange="_renderAttPhotoCards()"
+                            style="padding: 0.4rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.9rem; max-width: 150px;">
+                            <option value="">All Employees</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadAttendancePhotos()">Refresh</button>
+                    </div>
+                </div>
+                <p style="color: var(--gray); margin-bottom: 1.5rem;">View and manage all attendance check-in/out photos
+                    organized by employee.</p>
+                <p id="att-photo-count" style="color: var(--gray); font-size: 0.9rem; margin-bottom: 1rem;"></p>
+
+                <!-- Employee Cards rendered here -->
+                <div id="att-photos-container" class="dashboard-grid"
+                    style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));">
+                    <p style="text-align: center; color: var(--gray); padding: 3rem 0;">Loading attendance photos...</p>
+                </div>
+            </div>
+        </section>
+
     </main>
+
 
     <!-- EMPLOYEE DETAIL MODAL -->
     <div id="emp-detail-modal"
@@ -753,33 +788,44 @@
 
     <!-- IMAGE PREVIEW OVERLAY -->
     <div id="image-preview-overlay" class="image-preview-overlay" onclick="closeImagePreview(event)">
-        <div class="image-preview-container" onclick="event.stopPropagation()">
-            <!-- Close button -->
-            <button class="image-preview-close" onclick="closeImagePreview()">✕</button>
 
-            <!-- Navigation: Previous -->
-            <button id="preview-prev" onclick="prevImage()"
-                style="position: absolute; left: -60px; top: 50%; transform: translateY(-50%); background: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">◀</button>
-
-            <!-- Image -->
-            <img id="preview-image" src="" alt="Preview">
-
-            <!-- Navigation: Next -->
-            <button id="preview-next" onclick="nextImage()"
-                style="position: absolute; right: -60px; top: 50%; transform: translateY(-50%); background: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">▶</button>
-
-            <!-- Info + Counter -->
-            <div class="image-preview-info" id="preview-info"></div>
-            <div id="preview-counter" style="position: absolute; top: -40px; left: 0; color: white; font-size: 0.9rem;">
-            </div>
-
-            <!-- Download button -->
+        <!-- Top Bar: Counter | Download | Close -->
+        <div onclick="event.stopPropagation()"
+            style="width:100%; display:flex; align-items:center; justify-content:space-between; padding:0.75rem 1rem; flex-shrink:0; gap:0.5rem;">
+            <span id="preview-counter"
+                style="color:white; font-size:0.9rem; font-weight:600; min-width:40px;">1/1</span>
             <button onclick="downloadCurrentImage()"
-                style="position: absolute; top: -40px; left: 50%; transform: translateX(-50%); background: var(--primary); color: white; border: none; padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.3rem;">
-                ⬇ Download
-            </button>
+                style="background:var(--primary); color:white; border:none; padding:0.45rem 1.2rem; border-radius:20px; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:0.4rem; font-weight:600;">⬇
+                Download</button>
+            <button onclick="closeImagePreview()"
+                style="background:rgba(255,255,255,0.15); color:white; border:none; width:36px; height:36px; border-radius:50%; font-size:1.2rem; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:bold;">✕</button>
+        </div>
+
+        <!-- Image Area with nav arrows -->
+        <div onclick="event.stopPropagation()"
+            style="flex:1; width:100%; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; padding:0 3.5rem;">
+            <!-- Prev -->
+            <button id="preview-prev" onclick="prevImage()"
+                style="position:absolute; left:0.5rem; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.15); border:none; width:44px; height:44px; border-radius:50%; font-size:1.4rem; cursor:pointer; color:white; display:flex; align-items:center; justify-content:center; transition:background 0.2s; z-index:1;"
+                onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                onmouseout="this.style.background='rgba(255,255,255,0.15)'">◀</button>
+
+            <img id="preview-image" src="" alt="Preview"
+                style="max-width:100%; max-height:75vh; object-fit:contain; border-radius:10px; box-shadow:0 8px 40px rgba(0,0,0,0.6);">
+
+            <!-- Next -->
+            <button id="preview-next" onclick="nextImage()"
+                style="position:absolute; right:0.5rem; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.15); border:none; width:44px; height:44px; border-radius:50%; font-size:1.4rem; cursor:pointer; color:white; display:flex; align-items:center; justify-content:center; transition:background 0.2s; z-index:1;"
+                onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                onmouseout="this.style.background='rgba(255,255,255,0.15)'">▶</button>
+        </div>
+
+        <!-- Bottom Caption -->
+        <div class="image-preview-info" id="preview-info" onclick="event.stopPropagation()"
+            style="width:100%; text-align:center; padding:0.75rem 1rem; color:white; font-size:0.95rem; font-weight:600; flex-shrink:0; background:rgba(0,0,0,0.4);">
         </div>
     </div>
+
 
     <script src="js/app.js"></script>
     <style>

@@ -6,9 +6,15 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const dbService = require('./services/supabase-db'); // Use Supabase service
+const dns = require('node:dns');
+
+// Force Node to prefer IPv4 (fixes many connectivity issues on Windows/WiFi)
+if (typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+}
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // Configuration
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
@@ -21,6 +27,12 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '15012002J^aya';
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Redirect old MPA pages to SPA index.html
+const mpaPages = ['/dashboard.html', '/employees.html', '/attendance.html', '/advance.html', '/payroll.html', '/uploads.html', '/settings.html'];
+app.get(mpaPages, (req, res) => {
+    res.redirect('/');
+});
 
 // Multer Storage (Memory for Cloud Upload)
 const storage = multer.memoryStorage();
@@ -128,7 +140,12 @@ app.post('/api/attendance', async (req, res) => {
             timeOut: req.body.timeOut,
             workedHours: req.body.workedHours,
             slabMode: req.body.slabMode || false,
-            fare: req.body.fare || 0
+            fare: req.body.fare || 0,
+            checkInImage: req.body.checkInImage || null,
+            checkInLoc: req.body.checkInLoc || null,
+            checkOutImage: req.body.checkOutImage || null,
+            checkOutLoc: req.body.checkOutLoc || null,
+            securityFlag: req.body.securityFlag || null
         };
         const created = await dbService.createAttendance(att);
         res.json(created);
@@ -148,6 +165,12 @@ app.put('/api/attendance/:id', async (req, res) => {
 
 app.delete('/api/attendance/:id', async (req, res) => {
     try {
+        const att = await dbService.getAttendanceById(req.params.id);
+        // Also clean up any stored attendance photos
+        if (att) {
+            if (att.checkInImage && att.checkInImage.includes('supabase')) await dbService.deleteFile(att.checkInImage);
+            if (att.checkOutImage && att.checkOutImage.includes('supabase')) await dbService.deleteFile(att.checkOutImage);
+        }
         await dbService.deleteAttendance(req.params.id);
         res.json({ success: true });
     } catch (e) {
@@ -155,7 +178,97 @@ app.delete('/api/attendance/:id', async (req, res) => {
     }
 });
 
+// ATTENDANCE PHOTO UPLOAD — converts base64 to Supabase Storage, updates attendance record
+app.post('/api/attendance/upload-photo', async (req, res) => {
+    try {
+        const { attendanceId, employeeId, date, type, base64Image } = req.body;
+        if (!attendanceId || !base64Image || !type) {
+            return res.status(400).json({ error: 'attendanceId, type, and base64Image required' });
+        }
+
+        // base64Image may have data: prefix — strip it
+        const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+
+        const empId = (employeeId || 'emp').toString().replace(/[^a-zA-Z0-9]/g, '');
+        const safeDate = (date || new Date().toISOString().split('T')[0]).replace(/-/g, '');
+        const fileName = `attendance/${empId}_${safeDate}_${type}_${Date.now()}.jpg`;
+
+        const publicUrl = await dbService.uploadFile(buffer, fileName, 'image/jpeg');
+
+        // Update attendance record with URL
+        const updateField = type === 'in' ? { checkInImage: publicUrl } : { checkOutImage: publicUrl };
+        await dbService.updateAttendance(attendanceId, updateField);
+
+        res.json({ success: true, url: publicUrl });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ATTENDANCE PHOTOS GALLERY — list all photos from attendance records
+app.get('/api/attendance-photos', async (req, res) => {
+    try {
+        const attendance = await dbService.getAllAttendance();
+        const employees = await dbService.getAllEmployees();
+        const empMap = {};
+        employees.forEach(e => { empMap[e.id] = e.name; });
+
+        const photos = [];
+        attendance.forEach(att => {
+            const empName = att.employeeName || empMap[att.employeeId] || 'Unknown';
+            if (att.checkInImage) {
+                photos.push({
+                    attendanceId: att.id,
+                    employeeId: att.employeeId,
+                    employeeName: empName,
+                    date: att.date,
+                    time: att.timeIn,
+                    type: 'in',
+                    url: att.checkInImage
+                });
+            }
+            if (att.checkOutImage) {
+                photos.push({
+                    attendanceId: att.id,
+                    employeeId: att.employeeId,
+                    employeeName: empName,
+                    date: att.date,
+                    time: att.timeOut,
+                    type: 'out',
+                    url: att.checkOutImage
+                });
+            }
+        });
+
+        // Sort newest first
+        photos.sort((a, b) => new Date(b.date + 'T' + (b.time || '00:00')) - new Date(a.date + 'T' + (a.time || '00:00')));
+        res.json(photos);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE a single attendance photo (removes from storage, nulls the field)
+app.delete('/api/attendance-photos/:id/:type', async (req, res) => {
+    const { id, type } = req.params;
+    try {
+        const att = await dbService.getAttendanceById(id);
+        if (!att) return res.status(404).json({ error: 'Record not found' });
+
+        const field = type === 'in' ? 'checkInImage' : 'checkOutImage';
+        const url = att[field];
+        if (url) await dbService.deleteFile(url);
+
+        await dbService.updateAttendance(id, { [field]: null });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // HOLIDAYS
+
 app.get('/api/holidays', async (req, res) => {
     try {
         const holidays = await dbService.getAllHolidays();

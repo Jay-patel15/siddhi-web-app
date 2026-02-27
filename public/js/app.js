@@ -12,6 +12,52 @@ function formatTimeTo12h(timeStr) {
     return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
 }
 
+/**
+ * Compresses an image file client-side using Canvas API
+ * @param {File} file - The original image file
+ * @param {number} maxWidth - Maximum width in pixels
+ * @param {number} quality - Quality from 0 to 1
+ * @returns {Promise<File|Blob>} - Compressed file as Blob or File
+ */
+async function compressImage(file, maxWidth = 1024, quality = 0.7) {
+    if (!file || !file.type.startsWith('image/')) return file;
+    // Skip small files (under 200KB)
+    if (file.size < 200 * 1024) return file;
+
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth) {
+                    height = (maxWidth / width) * height;
+                    width = maxWidth;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                canvas.toBlob((blob) => {
+                    const compressedFile = new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    });
+                    resolve(compressedFile);
+                }, 'image/jpeg', quality);
+            };
+        };
+    });
+}
+
+
 
 // ==================== DARK MODE ====================
 function initDarkMode() {
@@ -82,33 +128,44 @@ function logout() {
 // Init
 async function init() {
     if (!checkAuth()) return;
+    setDefaultMonthFilters();
     await fetchSettings();
     await fetchHolidays();
+
+    // In SPA, always start with dashboard unless specified?
     showSection('dashboard');
 }
 
-// Navigation
+// Navigation (Restored for SPA)
 function showSection(sectionId) {
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-    document.getElementById(sectionId).classList.add('active');
+    // Hide all sections
+    document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+    // Show target section
+    const target = document.getElementById(sectionId);
+    if (target) {
+        target.classList.add('active');
+    }
 
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    const navItems = document.querySelectorAll('.nav-item');
-    navItems.forEach(item => {
-        if (item.getAttribute('onclick') && item.getAttribute('onclick').includes(sectionId)) {
+    // Update active nav link
+    document.querySelectorAll('.nav-links .nav-item').forEach(item => {
+        if (item.getAttribute('onclick')?.includes(`'${sectionId}'`)) {
             item.classList.add('active');
+        } else {
+            item.classList.remove('active');
         }
     });
 
-    document.getElementById('page-title').innerText = sectionId.charAt(0).toUpperCase() + sectionId.slice(1);
+    closeSidebarOnMobile();
 
+    // Call section-specific loads
     if (sectionId === 'dashboard') loadDashboard();
-    if (sectionId === 'employees') loadEmployees();
-    if (sectionId === 'attendance') loadAttendance();
-    if (sectionId === 'advance') loadAdvanceForm();
-    if (sectionId === 'payroll') loadPayroll();
-    if (sectionId === 'uploads') loadUploadsPage();
-    if (sectionId === 'settings') loadSettingsForm();
+    else if (sectionId === 'employees') loadEmployees();
+    else if (sectionId === 'attendance') loadAttendance();
+    else if (sectionId === 'advance') loadAdvanceForm();
+    else if (sectionId === 'payroll') loadPayroll();
+    else if (sectionId === 'uploads') loadUploadsPage();
+    else if (sectionId === 'attPhotos') loadAttendancePhotos();
+    else if (sectionId === 'settings') loadSettingsForm();
 }
 
 function toggleSidebar() {
@@ -116,15 +173,13 @@ function toggleSidebar() {
     document.querySelector('.overlay').classList.toggle('active');
 }
 
-// Close sidebar on mobile when a nav item is clicked
-document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-        if (window.innerWidth <= 768) {
-            document.getElementById('sidebar').classList.remove('open');
-            document.querySelector('.overlay').classList.remove('active');
-        }
-    });
-});
+// Close sidebar on mobile
+function closeSidebarOnMobile() {
+    if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('open');
+        document.querySelector('.overlay').classList.remove('active');
+    }
+}
 
 // --- SETTINGS ---
 async function fetchSettings() {
@@ -182,17 +237,43 @@ async function resetSettings() {
 async function loadDashboard() {
     // 1. Fetch all data
     await fetchHolidays();
-    const [empRes, attRes, advRes, payRes] = await Promise.all([
-        fetch(`${API_URL}/employees`),
-        fetch(`${API_URL}/attendance`),
-        fetch(`${API_URL}/advances`),
-        fetch(`${API_URL}/payments`)
-    ]);
-    employeesData = await empRes.json();
-    employeesData.sort((a, b) => a.name.localeCompare(b.name));
-    attendanceData = await attRes.json();
-    advancesData = await advRes.json();
-    const paymentsData = await payRes.json();
+    try {
+        const [empRes, attRes, advRes, payRes] = await Promise.all([
+            fetch(`${API_URL}/employees`),
+            fetch(`${API_URL}/attendance`),
+            fetch(`${API_URL}/advances`),
+            fetch(`${API_URL}/payments`)
+        ]);
+
+        if (!empRes.ok || !attRes.ok || !advRes.ok || !payRes.ok) {
+            throw new Error("Failed to fetch data from server");
+        }
+
+        employeesData = await empRes.json();
+        if (!Array.isArray(employeesData)) employeesData = [];
+        employeesData.sort((a, b) => a.name.localeCompare(b.name));
+
+        attendanceData = await attRes.json();
+        if (!Array.isArray(attendanceData)) attendanceData = [];
+
+        advancesData = await advRes.json();
+        if (!Array.isArray(advancesData)) advancesData = [];
+
+        const payData = await payRes.json();
+        const paymentsData = Array.isArray(payData) ? payData : [];
+    } catch (e) {
+        console.error("Dashboard Load Error (Detailed):", e);
+        const container = document.getElementById('employee-cards-container');
+        if (container) {
+            container.innerHTML =
+                `<div class="card" style="grid-column: 1/-1; border-color: var(--danger); background: #fee2e2; color: #b91c1c; padding: 1.5rem; text-align: center;">
+                    <h4 style="margin:0 0 0.5rem 0;">⚠️ Error Loading Data</h4>
+                    <p style="margin:0; font-size: 0.9rem;">Please ensure the server is running and database connection is active. <br> <small>${e.message}</small></p>
+                    <button class="btn btn-primary" style="margin-top: 1rem;" onclick="loadDashboard()">Retry</button>
+                </div>`;
+        }
+        return;
+    }
 
     // 2. Stats Calculation
     document.getElementById('dash-total-emp').innerText = employeesData.length;
@@ -381,8 +462,8 @@ function renderHolidayList() {
     sorted.forEach(date => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${date}</td>
-            <td>
+            <td data-label="Date">${date}</td>
+            <td data-label="Action">
                 <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;" onclick="deleteHoliday('${date}')">Delete</button>
             </td>
         `;
@@ -972,11 +1053,11 @@ async function updateModalData() {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${a.date} ${holidays.includes(a.date) ? '<span style="color:var(--danger)">(H)</span>' : ''}</td>
-            <td>${formatTimeTo12h(a.timeIn)}</td>
-            <td>${formatTimeTo12h(a.timeOut)}</td>
-            <td>${wh.toFixed(2)}${otLabel}</td>
-            <td>₹${Math.round(dayPay)}</td>
+            <td data-label="Date">${a.date} ${holidays.includes(a.date) ? '<span style="color:var(--danger)">(H)</span>' : ''}</td>
+            <td data-label="In">${formatTimeTo12h(a.timeIn)}</td>
+            <td data-label="Out">${formatTimeTo12h(a.timeOut)}</td>
+            <td data-label="Hours">${wh.toFixed(2)}${otLabel}</td>
+            <td data-label="Earned">₹${Math.round(dayPay)}</td>
         `;
         attBody.appendChild(tr);
     });
@@ -1061,7 +1142,12 @@ async function updateModalData() {
                 `<a href="${a.screenshot}" target="_blank" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>` :
                 `<a href="#" onclick="showPreview('${a.screenshot}', 'Advance Payment', '${a.date}', '${a.amount}'); return false;" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>`)
             : '-';
-        tr.innerHTML = `<td>${a.date}</td><td style="color:var(--danger)">₹${a.amount}</td><td>${a.notes || '-'}</td><td>${viewLink}</td>`;
+        tr.innerHTML = `
+            <td data-label="Date">${a.date}</td>
+            <td data-label="Amount" style="color:var(--danger)">₹${a.amount}</td>
+            <td data-label="Notes">${a.notes || '-'}</td>
+            <td data-label="Proof">${viewLink}</td>
+        `;
         advBody.appendChild(tr);
     });
 
@@ -1080,10 +1166,10 @@ async function updateModalData() {
                 : '-';
 
             tr.innerHTML = `
-                <td>${p.date}</td>
-                <td>${p.mode}</td>
-                <td style="color: #10b981; font-weight: bold;">₹${p.amount}</td>
-                <td>${viewLink}</td>
+                <td data-label="Date">${p.date}</td>
+                <td data-label="Mode">${p.mode}</td>
+                <td data-label="Amount" style="color: #10b981; font-weight: bold;">₹${p.amount}</td>
+                <td data-label="Proof">${viewLink}</td>
             `;
             payBody.appendChild(tr);
         });
@@ -1103,11 +1189,11 @@ async function loadEmployees() {
         const tr = document.createElement('tr');
         const hourly = (emp.salary / globalSettings.standardHours).toFixed(2);
         tr.innerHTML = `
-            <td>${emp.name}</td>
-            <td>${emp.contact}</td>
-            <td>₹${emp.salary}</td>
-            <td>₹${hourly}/hr</td>
-            <td>
+            <td data-label="Name">${emp.name}</td>
+            <td data-label="Contact">${emp.contact}</td>
+            <td data-label="Salary">₹${emp.salary}</td>
+            <td data-label="Hourly Rate">₹${hourly}/hr</td>
+            <td data-label="Actions">
                 <div class="action-buttons">
                     <button class="btn" style="background: var(--warning); color: white; padding: 0.25rem 0.5rem;" onclick="editEmployee('${emp.id}')">✏️</button>
                     <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;" onclick="deleteEmployee('${emp.id}')">🗑️</button>
@@ -1330,24 +1416,51 @@ async function loadAttendanceTable() {
         const fare = parseFloat(att.fare || 0);
         const total = computedPay + fare;
 
+        // Prepare Links HTML for IN
+        let inLinks = '';
+        if (att.checkInImage) {
+            inLinks += `<a href="#" onclick="showPreview('${att.checkInImage}', 'In Photo', '${att.date}', ''); return false;" style="color:var(--secondary); text-decoration:none; display: block; margin-bottom:2px; font-size:0.85em;">📷 Photo</a>`;
+        }
+        if (att.checkInLoc) {
+            let q = typeof att.checkInLoc === 'string' ? att.checkInLoc : `${att.checkInLoc.lat},${att.checkInLoc.lng}`;
+            inLinks += `<a href="https://maps.google.com/?q=${q}" target="_blank" style="color:var(--primary); text-decoration:none; display: block; font-size:0.85em;">📍 Location</a>`;
+        }
+        if (!inLinks) inLinks = '<span style="color:var(--gray); font-size:0.8em">None</span>';
+
+        // Prepare Links HTML for OUT
+        let outLinks = '-';
+        if (att.timeOut) {
+            outLinks = '';
+            if (att.checkOutImage) {
+                outLinks += `<a href="#" onclick="showPreview('${att.checkOutImage}', 'Out Photo', '${att.date}', ''); return false;" style="color:var(--secondary); text-decoration:none; display: block; margin-bottom:2px; font-size:0.85em;">📷 Photo</a>`;
+            }
+            if (att.checkOutLoc) {
+                let q = typeof att.checkOutLoc === 'string' ? att.checkOutLoc : `${att.checkOutLoc.lat},${att.checkOutLoc.lng}`;
+                outLinks += `<a href="https://maps.google.com/?q=${q}" target="_blank" style="color:var(--primary); text-decoration:none; display: block; font-size:0.85em;">📍 Location</a>`;
+            }
+            if (!outLinks) outLinks = '<span style="color:var(--gray); font-size:0.8em">None</span>';
+        }
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${att.date}</td>
-            <td>${empName}</td>
-            <td>${formatTimeTo12h(att.timeIn)}</td>
-            <td>${formatTimeTo12h(att.timeOut)}</td>
-            <td>${workedHours.toFixed(2)}h
+            <td data-label="Date">${att.date}</td>
+            <td data-label="Employee" style="font-weight:500;">${empName}</td>
+            <td data-label="Time In"><span style="font-weight:600; color:var(--dark)">${formatTimeTo12h(att.timeIn)}</span></td>
+            <td data-label="In Links">${inLinks}</td>
+            <td data-label="Time Out"><span style="font-weight:600; color:var(--dark)">${att.timeOut ? formatTimeTo12h(att.timeOut) : '-'}</span></td>
+            <td data-label="Out Links">${outLinks}</td>
+            <td data-label="Hours">${workedHours.toFixed(2)}h
                 ${att.slabMode && workedHours > globalSettings.standardHours ? '<span style="color:var(--warning); font-size: 0.8em"> (OT)</span>' : ''}
             </td>
-            <td>
+            <td data-label="Mode">
                 <span style="padding: 2px 8px; border-radius: 4px; font-size: 0.8em; background: ${att.slabMode ? '#dcfce7; color: #166534' : '#e0e7ff; color: #3730a3'}">
                     ${att.slabMode ? 'Slab' : 'Normal'}
                 </span>
             </td>
-            <td>₹${Math.round(computedPay)}</td>
-            <td>₹${fare}</td>
-            <td style="font-weight: bold">₹${Math.round(total)}</td>
-            <td>
+            <td data-label="Salary (Est.)">₹${Math.round(computedPay)}</td>
+            <td data-label="Fare">₹${fare}</td>
+            <td data-label="Total" style="font-weight: bold">₹${Math.round(total)}</td>
+            <td data-label="Action">
                 <div class="action-buttons">
                     <button class="btn" style="background: var(--warning); color: white; padding: 0.25rem 0.5rem;" onclick="editAttendance('${att.id}')">✏️</button>
                     <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;" onclick="deleteAttendance('${att.id}')">🗑️</button>
@@ -1560,14 +1673,14 @@ async function loadAdvanceTable() {
             : '-';
 
         tr.innerHTML = `
-            <td>${adv.date}</td>
-            <td>${empName}</td>
-            <td style="font-weight: bold; color: var(--danger)">₹${adv.amount}</td>
-            <td>${dedMonth}</td>
-            <td>${adv.mode}</td>
-            <td>${adv.notes || '-'}</td>
-            <td>${viewLink}</td>
-            <td>
+            <td data-label="Date">${adv.date}</td>
+            <td data-label="Employee">${empName}</td>
+            <td data-label="Amount" style="font-weight: bold; color: var(--danger)">₹${adv.amount}</td>
+            <td data-label="Deduction Month">${dedMonth}</td>
+            <td data-label="Mode">${adv.mode}</td>
+            <td data-label="Notes">${adv.notes || '-'}</td>
+            <td data-label="Screenshot">${viewLink}</td>
+            <td data-label="Actions">
                 <div class="action-buttons">
                     <button class="btn" style="background: var(--warning); color: white; padding: 0.25rem 0.5rem;" onclick="editAdvance('${adv.id}')">✏️</button>
                      <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;" onclick="deleteAdvance('${adv.id}')">🗑️</button>
@@ -1623,7 +1736,8 @@ document.getElementById('advance-form').addEventListener('submit', async (e) => 
 
     const fileInput = document.getElementById('adv-screenshot');
     if (fileInput.files[0]) {
-        formData.append('screenshot', fileInput.files[0]);
+        const compressed = await compressImage(fileInput.files[0]);
+        formData.append('screenshot', compressed);
     }
 
     if (id) {
@@ -1779,7 +1893,8 @@ document.getElementById('payment-form').addEventListener('submit', async (e) => 
 
     const fileInput = document.getElementById('pay-screenshot');
     if (fileInput.files[0]) {
-        formData.append('screenshot', fileInput.files[0]);
+        const compressed = await compressImage(fileInput.files[0]);
+        formData.append('screenshot', compressed);
     }
 
     try {
@@ -1796,8 +1911,44 @@ document.getElementById('payment-form').addEventListener('submit', async (e) => 
     }
 });
 
+// ==================== AUTO DEFAULT CURRENT MONTH ====================
+function setDefaultMonthFilters() {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    // Select all month inputs on the page
+    document.querySelectorAll('input[type="month"]').forEach(input => {
+        // Only set if empty or if it's the specific dashboard/payroll filters
+        if (!input.value) {
+            input.value = currentMonth;
+        }
+    });
+
+    // Specific IDs that MUST have a value for initial load to work correctly
+    const criticalFilters = [
+        'dashboard-month-filter',
+        'att-filter-month',
+        'adv-filter-month',
+        'payroll-month',
+        'uploads-filter-month'
+    ];
+
+    criticalFilters.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.value) {
+            el.value = currentMonth;
+        }
+    });
+}
+
+// Initialize on DOM Load
+document.addEventListener('DOMContentLoaded', () => {
+    setDefaultMonthFilters();
+});
+
 // Initialize
 init();
+
 
 // --- EXPORT TO CSV (Detailed Report) ---
 // --- EXPORT TO CSV (Detailed Report) ---
@@ -2216,16 +2367,26 @@ let currentPreviewIndex = 0;
 
 function openImagePreview(src, type, date, amount) {
     const overlay = document.getElementById('image-preview-overlay');
-    const img = document.getElementById('preview-image');
-    const info = document.getElementById('preview-info');
 
-    // Build list of all currently visible images for navigation
-    previewImages = allGalleryImages.map(img => ({
-        src: img.screenshot,
-        type: img.type,
-        date: img.date,
-        amount: img.amount
-    }));
+    // Build list of images for navigation
+    if (_attGalleryMode && _attGalleryImages.length > 0) {
+        // Attendance photos mode
+        previewImages = _attGalleryImages.map(p => ({
+            src: p.url,
+            type: p.type === 'in' ? '🔒 Check In' : '🔓 Check Out',
+            date: p.date,
+            amount: p.time ? formatTimeTo12h(p.time) : '--',
+            isAttPhoto: true
+        }));
+    } else {
+        // Uploads mode (original behaviour)
+        previewImages = allGalleryImages.map(img => ({
+            src: img.screenshot,
+            type: img.type,
+            date: img.date,
+            amount: img.amount
+        }));
+    }
 
     // Find the current image index
     currentPreviewIndex = previewImages.findIndex(i => i.src === src);
@@ -2247,7 +2408,12 @@ function updatePreviewImage() {
     if (!current) return;
 
     img.src = current.src;
-    info.innerHTML = `<strong>${current.type === 'advance' ? 'Advance' : 'Payment'}</strong> • ${current.date} • ₹${current.amount}`;
+
+    if (current.isAttPhoto) {
+        info.innerHTML = `<strong>${current.type}</strong> • ${current.date} • ${current.amount}`;
+    } else {
+        info.innerHTML = `<strong>${current.type === 'advance' ? 'Advance' : 'Payment'}</strong> • ${current.date} • ₹${current.amount}`;
+    }
 
     if (counter) {
         counter.innerText = `${currentPreviewIndex + 1} / ${previewImages.length}`;
@@ -2298,7 +2464,7 @@ async function downloadCurrentImage() {
 }
 
 function closeImagePreview(event) {
-    // If event exists, only close if clicking the overlay (not the image)
+    // If event exists, only close if clicking the background overlay
     if (event && event.target.id !== 'image-preview-overlay') return;
 
     const overlay = document.getElementById('image-preview-overlay');
@@ -2554,3 +2720,250 @@ window.confirmFactoryReset = async function () {
 window.closeEnhancedPreview = closeEnhancedPreview;
 window.zoomPreview = zoomPreview;
 window.downloadPreviewImage = downloadPreviewImage;
+
+// ==================== ATTENDANCE PHOTOS GALLERY ====================
+
+// ========= ATTENDANCE PHOTOS PAGE =========
+
+let _attPhotosAll = [];          // all fetched photos
+let _attPhotoEmployees = [];     // all employees (for the employee cards)
+let _attGalleryImages = [];      // photos for the currently open gallery
+let _attSelectedForDeletion = []; // selected attendance photos for batch delete
+let _attGalleryMode = true;      // flag: gallery-modal is in attPhotos mode
+
+async function loadAttendancePhotos() {
+    const container = document.getElementById('att-photos-container');
+    if (!container) return;
+
+    // Default month filter to current month on first load
+    const monthEl = document.getElementById('att-photo-month-filter');
+    if (monthEl && !monthEl.value) {
+        const now = new Date();
+        monthEl.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    container.innerHTML = '<p style="text-align:center; color:var(--gray); padding:3rem 0;">⏳ Loading photos...</p>';
+
+    try {
+        const [empRes, photoRes] = await Promise.all([
+            fetch(`${API_URL}/employees`),
+            fetch(`${API_URL}/attendance-photos`)
+        ]);
+
+        _attPhotoEmployees = (await empRes.json()).sort((a, b) => a.name.localeCompare(b.name));
+        _attPhotosAll = await photoRes.json();
+
+        _renderAttPhotoCards();
+    } catch (e) {
+        container.innerHTML = `<p style="color:var(--danger); text-align:center; padding:2rem;">Error: ${e.message}</p>`;
+    }
+}
+
+function _renderAttPhotoCards() {
+    const container = document.getElementById('att-photos-container');
+    const countEl = document.getElementById('att-photo-count');
+    const monthFilter = (document.getElementById('att-photo-month-filter')?.value || '').trim();
+    const empFilter = (document.getElementById('att-photo-emp-filter')?.value || '').trim();
+
+    // Filter photos
+    let filtered = _attPhotosAll;
+    if (monthFilter) filtered = filtered.filter(p => p.date && p.date.startsWith(monthFilter));
+    if (empFilter) filtered = filtered.filter(p => p.employeeName === empFilter);
+
+    if (countEl) countEl.textContent = `${filtered.length} photo${filtered.length !== 1 ? 's' : ''}`;
+
+    // Group by employeeId
+    const byEmp = {};
+    filtered.forEach(p => {
+        const key = p.employeeId || p.employeeName;
+        if (!byEmp[key]) byEmp[key] = [];
+        byEmp[key].push(p);
+    });
+
+    // Populate employee dropdown
+    const empFilterEl = document.getElementById('att-photo-emp-filter');
+    if (empFilterEl) {
+        const names = [...new Set(_attPhotosAll.map(p => p.employeeName))].sort();
+        const currentVal = empFilterEl.value;
+        empFilterEl.innerHTML = '<option value="">All Employees</option>' +
+            names.map(n => `<option value="${n}" ${n === currentVal ? 'selected' : ''}>${n}</option>`).join('');
+    }
+
+    container.innerHTML = '';
+
+    if (_attPhotoEmployees.length === 0) {
+        container.innerHTML = '<p style="color:var(--gray); text-align:center; padding:2rem;">No employees found.</p>';
+        return;
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'dashboard-grid';
+    grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(250px, 1fr))';
+    container.appendChild(grid);
+
+    _attPhotoEmployees.forEach(emp => {
+        const empPhotos = byEmp[emp.id] || byEmp[emp.name] || [];
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.cursor = 'pointer';
+        card.style.transition = 'transform 0.2s, box-shadow 0.2s';
+        card.onmouseenter = function () { this.style.transform = 'translateY(-5px)'; this.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; };
+        card.onmouseleave = function () { this.style.transform = ''; this.style.boxShadow = ''; };
+        card.onclick = () => openAttPhotoGallery(emp.id, emp.name);
+
+        card.innerHTML = `
+            <div style="display:flex; align-items:center; gap:1rem;">
+                <div style="width:60px; height:60px; border-radius:50%; background:linear-gradient(135deg, var(--primary), var(--secondary)); display:flex; align-items:center; justify-content:center; font-size:1.5rem; color:white; font-weight:bold; flex-shrink:0;">
+                    ${emp.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                    <h4 style="margin:0;">${emp.name}</h4>
+                    <p style="margin:0.25rem 0 0; color:var(--gray); font-size:0.9rem;">${emp.phone || 'No phone'}</p>
+                </div>
+            </div>
+            <div style="margin-top:1rem; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <span style="font-size:2rem; font-weight:bold; color:var(--primary);">${empPhotos.length}</span>
+                    <span style="color:var(--gray);"> photos</span>
+                </div>
+                <button class="btn btn-primary" style="padding:0.5rem 1rem; font-size:0.85rem;">View →</button>
+            </div>`;
+        grid.appendChild(card);
+    });
+}
+
+function openAttPhotoGallery(employeeId, employeeName) {
+    _attGalleryMode = true;
+    _attSelectedForDeletion = [];
+
+    document.getElementById('gallery-title').innerText = `📸 ${employeeName}'s Attendance Photos`;
+    document.getElementById('gallery-date-filter').value = '';
+    document.getElementById('delete-selected-btn').style.display = 'none';
+    document.getElementById('download-selected-btn').style.display = 'none';
+
+    // get current month filter from the page
+    const monthFilter = (document.getElementById('att-photo-month-filter')?.value || '').trim();
+    _attGalleryImages = _attPhotosAll.filter(p => {
+        const matchEmp = String(p.employeeId) === String(employeeId) || p.employeeName === employeeName;
+        const matchMonth = monthFilter ? (p.date && p.date.startsWith(monthFilter)) : true;
+        return matchEmp && matchMonth;
+    });
+
+    _renderAttGalleryImages(_attGalleryImages);
+    document.getElementById('gallery-modal').style.display = 'flex';
+}
+
+function _renderAttGalleryImages(images) {
+    const grid = document.getElementById('gallery-grid');
+    const emptyMsg = document.getElementById('gallery-empty');
+    const countEl = document.getElementById('gallery-count');
+
+    grid.innerHTML = '';
+    if (images.length === 0) {
+        emptyMsg.style.display = 'block';
+        countEl.innerText = '0 photos';
+        return;
+    }
+    emptyMsg.style.display = 'none';
+    countEl.innerText = `${images.length} photo(s)`;
+
+    images.forEach(p => {
+        const isSelected = _attSelectedForDeletion.some(s => s.attendanceId === p.attendanceId && s.type === p.type);
+        const typeLabel = p.type === 'in' ? '🔒 Check In' : '🔓 Check Out';
+        const typeColor = p.type === 'in' ? '#10b981' : '#ef4444';
+        const timeFormatted = p.time ? formatTimeTo12h(p.time) : '--';
+
+        const item = document.createElement('div');
+        item.className = 'gallery-item';
+        item.style.cssText = `position:relative; border-radius:10px; overflow:hidden; background:var(--light); border:2px solid ${isSelected ? 'var(--danger)' : 'transparent'}; transition:all 0.2s;`;
+
+        item.innerHTML = `
+            <div style="position:relative;">
+                <img src="${p.url}" alt="Attendance Photo"
+                    style="width:100%; height:150px; object-fit:cover; cursor:pointer;"
+                    onclick="openImagePreview('${p.url}', '${typeLabel}', '${p.date}', '${timeFormatted}')"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div style="display:none; width:100%; height:150px; align-items:center; justify-content:center; background:#f1f5f9; font-size:2rem;">📷</div>
+                <span style="position:absolute; top:6px; left:6px; background:${typeColor}; color:white; font-size:0.65rem; font-weight:700; padding:2px 8px; border-radius:20px;">${typeLabel}</span>
+                <input type="checkbox" ${isSelected ? 'checked' : ''}
+                    style="position:absolute; top:10px; right:10px; width:20px; height:20px; cursor:pointer; accent-color:var(--danger);"
+                    onchange="_toggleAttPhotoSelection('${p.attendanceId}', '${p.type}', '${p.url}', this.checked); this.closest('.gallery-item').style.borderColor = this.checked ? 'var(--danger)' : 'transparent';">
+            </div>
+            <div style="padding:0.75rem;">
+                <p style="margin:0; font-size:0.85rem; color:var(--gray);">${p.date}</p>
+                <p style="margin:0.25rem 0 0; font-weight:bold; color:${typeColor};">${timeFormatted}</p>
+            </div>`;
+        grid.appendChild(item);
+    });
+}
+
+function _toggleAttPhotoSelection(attendanceId, type, url, isChecked) {
+    if (isChecked) {
+        _attSelectedForDeletion.push({ attendanceId, type, url });
+    } else {
+        _attSelectedForDeletion = _attSelectedForDeletion.filter(s => !(s.attendanceId === attendanceId && s.type === type));
+    }
+    const deleteBtn = document.getElementById('delete-selected-btn');
+    const downloadBtn = document.getElementById('download-selected-btn');
+    if (_attSelectedForDeletion.length > 0) {
+        deleteBtn.style.display = 'block';
+        deleteBtn.innerText = `🗑️ Delete (${_attSelectedForDeletion.length})`;
+        downloadBtn.style.display = 'block';
+        downloadBtn.innerText = `⬇️ Download (${_attSelectedForDeletion.length})`;
+    } else {
+        deleteBtn.style.display = 'none';
+        downloadBtn.style.display = 'none';
+    }
+}
+
+// Override the existing deleteSelectedImages to handle both modes
+const _originalDeleteSelectedImages = window.deleteSelectedImages;
+window.deleteSelectedImages = function () {
+    if (_attGalleryMode) {
+        if (_attSelectedForDeletion.length === 0) return;
+        document.getElementById('delete-confirm-msg').innerText =
+            `Delete ${_attSelectedForDeletion.length} attendance photo(s)? The attendance records will be kept.`;
+        document.getElementById('delete-confirm-modal').style.display = 'flex';
+    } else {
+        _originalDeleteSelectedImages && _originalDeleteSelectedImages();
+    }
+};
+
+// Override confirmDelete to handle both modes
+const _originalConfirmDelete = window.confirmDelete;
+window.confirmDelete = async function () {
+    document.getElementById('delete-confirm-modal').style.display = 'none';
+    if (_attGalleryMode) {
+        try {
+            for (const item of _attSelectedForDeletion) {
+                await fetch(`${API_URL}/attendance-photos/${item.attendanceId}/${item.type}`, { method: 'DELETE' });
+                _attPhotosAll = _attPhotosAll.filter(p => !(p.attendanceId === item.attendanceId && p.type === item.type));
+            }
+            _attSelectedForDeletion = [];
+            document.getElementById('delete-selected-btn').style.display = 'none';
+            document.getElementById('download-selected-btn').style.display = 'none';
+            _attGalleryImages = _attGalleryImages.filter(p =>
+                !_attSelectedForDeletion.some(s => s.attendanceId === p.attendanceId && s.type === p.type));
+            _renderAttGalleryImages(_attGalleryImages);
+            _renderAttPhotoCards();
+            alert('Photo(s) deleted successfully!');
+        } catch (e) {
+            alert('Error deleting: ' + e.message);
+        }
+    } else {
+        _originalConfirmDelete && _originalConfirmDelete();
+    }
+};
+
+// Override closeGalleryModal to reset attGalleryMode
+const _originalCloseGalleryModal = window.closeGalleryModal;
+window.closeGalleryModal = function () {
+    _attGalleryMode = false;
+    _attSelectedForDeletion = [];
+    _originalCloseGalleryModal && _originalCloseGalleryModal();
+};
+
+window.loadAttendancePhotos = loadAttendancePhotos;
+window.openAttPhotoGallery = openAttPhotoGallery;
+
+
