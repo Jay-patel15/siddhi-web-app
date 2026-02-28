@@ -1392,17 +1392,30 @@
             });
         }
 
-        function getLocalDateString() {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
+        function getLocalDateString(dateObj = new Date()) {
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         }
 
         function updateAttendanceButtons() {
-            const today = getLocalDateString();
-            const todayRecord = allData.attendance.find(a => String(a.employeeId) === String(currentEmployee.id) && a.date === today);
+            const now = new Date();
+            const todayStr = getLocalDateString(now);
+
+            // Check yesterday's date string as well
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = getLocalDateString(yesterday);
+
+            const myRecords = allData.attendance.filter(a => String(a.employeeId) === String(currentEmployee.id));
+
+            // Find an open shift from either today or yesterday (has timeIn but no timeOut)
+            const openShift = myRecords.find(a => (a.date === todayStr || a.date === yesterdayStr) && a.timeIn && !a.timeOut);
+
+            // Look for a shift specifically marked for today
+            const todayRecord = myRecords.find(a => a.date === todayStr);
+
             const btnIn = document.getElementById('btn-check-in');
             const btnOut = document.getElementById('btn-check-out');
             const statusMsg = document.getElementById('attendance-status');
@@ -1416,17 +1429,20 @@
             btnIn.style.display = 'flex'; btnOut.style.display = 'flex';
             statusMsg.style.display = 'none';
 
-            if (!todayRecord) {
+            if (openShift) {
+                // There is an ongoing shift that needs a checkout (could be from yesterday!)
+                btnIn.disabled = true; btnOut.disabled = false;
+                btnIn.style.display = 'none'; // hide check in
+                instr.innerText = openShift.date === yesterdayStr ? "Working... Reminder: You are checking out for yesterday's shift." : "Working... Remember to check out.";
+                btnOut.innerHTML = "🔓 Check Out";
+            } else if (!todayRecord) {
+                // No open shift, and no record for today at all. Ready to start new day.
                 btnIn.disabled = false; btnOut.disabled = true;
                 btnOut.style.display = 'none'; // hide until checked in
                 instr.innerText = "Check in to start your work today.";
                 btnIn.innerHTML = "🔒 Check In";
-            } else if (todayRecord.timeIn && !todayRecord.timeOut) {
-                btnIn.disabled = true; btnOut.disabled = false;
-                btnIn.style.display = 'none'; // hide check in
-                instr.innerText = "Working... Remember to check out.";
-                btnOut.innerHTML = "🔓 Check Out";
             } else {
+                // Today's shift is fully complete (has both timeIn and timeOut)
                 btnIn.disabled = true; btnOut.disabled = true;
                 btnIn.innerHTML = "✅ Checked In"; btnOut.innerHTML = "✅ Checked Out";
                 instr.innerText = "Shift completed for today. Great job!";
@@ -1548,9 +1564,28 @@
                         });
                     }
                 } else {
-                    const todayRecord = allData.attendance.find(a => String(a.employeeId) === String(currentEmployee.id) && a.date === dateStr);
-                    if (!todayRecord) throw new Error("Check-in record not found");
-                    const workedHours = ((now - parseTime(todayRecord.timeIn)) / (1000 * 60 * 60)).toFixed(2);
+                    // Check Out logic -> Find the active open shift (today or yesterday)
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const yesterdayStr = getLocalDateString(yesterday);
+
+                    const openRecord = allData.attendance.find(a =>
+                        String(a.employeeId) === String(currentEmployee.id) &&
+                        (a.date === dateStr || a.date === yesterdayStr) &&
+                        a.timeIn && !a.timeOut
+                    );
+
+                    if (!openRecord) throw new Error("Active check-in record not found");
+
+                    const timeInDate = parseTime(openRecord.timeIn);
+                    let timeOutDate = parseTime(timeStr);
+
+                    // If checkout time is chronologically before check-in time (e.g. 11 PM to 1 AM)
+                    if (timeOutDate < timeInDate) {
+                        timeOutDate.setDate(timeOutDate.getDate() + 1); // Add 24 hours
+                    }
+
+                    const workedHours = ((timeOutDate - timeInDate) / (1000 * 60 * 60)).toFixed(2);
 
                     // Step 1: Update attendance record with timeOut and location (no base64)
                     const updateData = {
@@ -1558,7 +1593,7 @@
                         checkOutLoc: location ? { lat: location.lat, lng: location.lng, accuracy: location.accuracy } : null,
                         securityFlag: location && location.isMocked ? 'MOCKED_LOCATION' : 'SECURE'
                     };
-                    res = await fetch(`${API_URL}/api/attendance/${todayRecord.id}`, {
+                    res = await fetch(`${API_URL}/api/attendance/${openRecord.id}`, {
                         method: 'PUT', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(updateData)
                     });
@@ -1570,9 +1605,9 @@
                         await fetch(`${API_URL}/api/attendance/upload-photo`, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                attendanceId: todayRecord.id,
+                                attendanceId: openRecord.id,
                                 employeeId: currentEmployee.id,
-                                date: dateStr, type: 'out',
+                                date: openRecord.date, type: 'out',
                                 base64Image
                             })
                         });
