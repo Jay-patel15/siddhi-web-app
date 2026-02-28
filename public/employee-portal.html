@@ -986,7 +986,7 @@
         <div class="brand" style="display: flex; align-items: center; gap: 12px;">
             <!-- Crop container for the lightbulb icon from the flat logo -->
             <div
-                style="width: 45px; height: 55px; overflow: hidden; display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0; border-radius: 8px; background: white; padding-left: 5px;">
+                style="width: 55px; height: 55px; overflow: hidden; display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0; border-radius: 12px; background: white;">
                 <img src="assets/logo-horizontal.png" alt="Icon" style="height: 55px; width: auto; max-width: none;">
             </div>
             <!-- Stacked brand text - using white for the portal header since it's a dark gradient -->
@@ -1221,7 +1221,7 @@
     </div>
 
     <script>
-        // --- 12 Hour Auto-Logout ---
+        // --- 1 Hour Auto-Logout (Employees) ---
         (function checkAuth() {
             const sessionStr = localStorage.getItem('payroll_session');
             if (!sessionStr) {
@@ -1231,7 +1231,7 @@
             try {
                 const session = JSON.parse(sessionStr);
                 const now = Date.now();
-                const limit = 12 * 60 * 60 * 1000; // 12 Hours
+                const limit = 1 * 60 * 60 * 1000; // 1 Hour
                 if (now - session.timestamp > limit) {
                     localStorage.removeItem('payroll_session');
                     window.location.href = 'login.html';

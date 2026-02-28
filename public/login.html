@@ -70,13 +70,24 @@
 
         // Check if already logged in
         window.onload = function () {
-            const session = localStorage.getItem('payroll_session');
-            if (session) {
-                const data = JSON.parse(session);
-                if (data.role === 'admin') {
-                    window.location.href = 'index.html';
-                } else if (data.role === 'employee') {
-                    window.location.href = 'employee-portal.html';
+            const sessionStr = localStorage.getItem('payroll_session');
+            if (sessionStr) {
+                try {
+                    const data = JSON.parse(sessionStr);
+                    const age = Date.now() - data.timestamp;
+
+                    if (data.role === 'admin' && age <= 12 * 60 * 60 * 1000) {
+                        window.location.href = 'index.html';
+                        return;
+                    } else if (data.role === 'employee' && age <= 1 * 60 * 60 * 1000) {
+                        window.location.href = 'employee-portal.html';
+                        return;
+                    }
+
+                    // If expired, clear it
+                    localStorage.removeItem('payroll_session');
+                } catch (e) {
+                    localStorage.removeItem('payroll_session');
                 }
             }
 
