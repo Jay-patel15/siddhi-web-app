@@ -1238,7 +1238,7 @@ async function deleteEmployee(id) {
 document.getElementById('employee-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('emp-id').value;
-    const name = document.getElementById('emp-name').value;
+    const name = document.getElementById('emp-name').value.toUpperCase();
     const contact = document.getElementById('emp-contact').value;
     const salary = document.getElementById('emp-salary').value;
     const customId = document.getElementById('emp-custom-id').value;
