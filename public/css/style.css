@@ -619,7 +619,8 @@ table {
 
 th,
 td {
-    padding: 1rem 1.5rem;
+    padding: 0.5rem 0.75rem;
+    /* Reduced padding for a more compact view */
     text-align: left;
     border-bottom: 1px solid #e2e8f0;
 }
@@ -655,6 +656,12 @@ tr:hover {
 .action-buttons {
     display: flex;
     gap: 0.5rem;
+}
+
+.action-buttons-stacked {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
 }
 
 /* Dashboard Widgets */

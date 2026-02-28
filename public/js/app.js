@@ -1469,7 +1469,7 @@ async function loadAttendanceTable() {
             <td data-label="Fare">₹${fare}</td>
             <td data-label="Total" style="font-weight: bold">₹${Math.round(total)}</td>
             <td data-label="Action">
-                <div class="action-buttons">
+                <div class="action-buttons-stacked">
                     <button class="btn" style="background: var(--warning); color: white; padding: 0.25rem 0.5rem;" onclick="editAttendance('${att.id}')">✏️</button>
                     <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;" onclick="deleteAttendance('${att.id}')">🗑️</button>
                 </div>
@@ -1739,7 +1739,7 @@ async function loadAdvanceTable() {
             <td data-label="Notes">${adv.notes || '-'}</td>
             <td data-label="Screenshot">${viewLink}</td>
             <td data-label="Actions">
-                <div class="action-buttons">
+                <div class="action-buttons-stacked">
                     <button class="btn" style="background: var(--warning); color: white; padding: 0.25rem 0.5rem;" onclick="editAdvance('${adv.id}')">✏️</button>
                      <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;" onclick="deleteAdvance('${adv.id}')">🗑️</button>
                 </div>

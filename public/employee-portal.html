@@ -1441,9 +1441,9 @@
                     securityAccuracy.style.color = '#10b981'; // Green
                 }).catch(err => {
                     console.warn("Location error:", err);
-                    securityAccuracy.innerHTML = "unavailable / denied";
+                    securityAccuracy.innerHTML = "Please turn on your Location 📍";
                     securityAccuracy.style.color = 'var(--danger)';
-                    throw new Error("Location is required to check in. Please enable GPS.");
+                    throw new Error("Location is required. Please turn on your device's GPS and try again.");
                 });
 
                 // Wait for BOTH camera and location to be ready
