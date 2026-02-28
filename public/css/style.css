@@ -619,10 +619,14 @@ table {
 
 th,
 td {
-    padding: 0.5rem 0.75rem;
-    /* Reduced padding for a more compact view */
+    padding: 0.4rem 0.5rem;
+    /* Ultra compact padding */
     text-align: left;
     border-bottom: 1px solid #e2e8f0;
+    font-size: 0.85rem;
+    /* Slightly smaller text across all table cells */
+    white-space: nowrap;
+    /* Prevent text wrapping to keep rows short and predictable */
 }
 
 th {
@@ -630,9 +634,12 @@ th {
     font-weight: 700;
     color: #475569;
     text-transform: uppercase;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
+    /* Even smaller headers */
     letter-spacing: 0.05em;
     border: none;
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
 }
 
 th:first-child {

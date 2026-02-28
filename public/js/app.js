@@ -1406,19 +1406,21 @@ async function loadAttendanceTable() {
         const empName = emp ? emp.name : att.employeeName + ' (Deleted)';
         const defaultSalary = emp ? emp.salary : 0;
 
-        const workedHours = parseFloat(att.workedHours);
+        const workedHours = att.workedHours ? parseFloat(att.workedHours) : null;
         const salary = parseFloat(defaultSalary);
 
         // Use Global Settings
         const normalRate = salary / globalSettings.standardHours;
         let computedPay = 0;
 
-        if (att.slabMode && workedHours > globalSettings.standardHours) {
-            const extraHours = workedHours - globalSettings.standardHours;
-            const slabRate = salary / globalSettings.slabHours;
-            computedPay = (normalRate * globalSettings.standardHours) + (slabRate * extraHours);
-        } else {
-            computedPay = normalRate * workedHours;
+        if (workedHours !== null) {
+            if (att.slabMode && workedHours > globalSettings.standardHours) {
+                const extraHours = workedHours - globalSettings.standardHours;
+                const slabRate = salary / globalSettings.slabHours;
+                computedPay = (normalRate * globalSettings.standardHours) + (slabRate * extraHours);
+            } else {
+                computedPay = normalRate * workedHours;
+            }
         }
 
         const fare = parseFloat(att.fare || 0);
@@ -1427,11 +1429,11 @@ async function loadAttendanceTable() {
         // Prepare Links HTML for IN
         let inLinks = '';
         if (att.checkInImage) {
-            inLinks += `<a href="#" onclick="showPreview('${att.checkInImage}', 'In Photo', '${att.date}', ''); return false;" style="color:var(--secondary); text-decoration:none; display: block; margin-bottom:2px; font-size:0.85em;">📷 Photo</a>`;
+            inLinks += `<a href="#" onclick="showPreview('${att.checkInImage}', 'In Photo', '${att.date}', ''); return false;" style="color:var(--secondary); text-decoration:none; display: block; margin-bottom:2px; font-size:0.85em;">📷 View</a>`;
         }
         if (att.checkInLoc) {
             let q = typeof att.checkInLoc === 'string' ? att.checkInLoc : `${att.checkInLoc.lat},${att.checkInLoc.lng}`;
-            inLinks += `<a href="https://maps.google.com/?q=${q}" target="_blank" style="color:var(--primary); text-decoration:none; display: block; font-size:0.85em;">📍 Location</a>`;
+            inLinks += `<a href="https://maps.google.com/?q=${q}" target="_blank" style="color:var(--primary); text-decoration:none; display: block; font-size:0.85em;">📍 Map</a>`;
         }
         if (!inLinks) inLinks = '<span style="color:var(--gray); font-size:0.8em">None</span>';
 
@@ -1440,11 +1442,11 @@ async function loadAttendanceTable() {
         if (att.timeOut) {
             outLinks = '';
             if (att.checkOutImage) {
-                outLinks += `<a href="#" onclick="showPreview('${att.checkOutImage}', 'Out Photo', '${att.date}', ''); return false;" style="color:var(--secondary); text-decoration:none; display: block; margin-bottom:2px; font-size:0.85em;">📷 Photo</a>`;
+                outLinks += `<a href="#" onclick="showPreview('${att.checkOutImage}', 'Out Photo', '${att.date}', ''); return false;" style="color:var(--secondary); text-decoration:none; display: block; margin-bottom:2px; font-size:0.85em;">📷 View</a>`;
             }
             if (att.checkOutLoc) {
                 let q = typeof att.checkOutLoc === 'string' ? att.checkOutLoc : `${att.checkOutLoc.lat},${att.checkOutLoc.lng}`;
-                outLinks += `<a href="https://maps.google.com/?q=${q}" target="_blank" style="color:var(--primary); text-decoration:none; display: block; font-size:0.85em;">📍 Location</a>`;
+                outLinks += `<a href="https://maps.google.com/?q=${q}" target="_blank" style="color:var(--primary); text-decoration:none; display: block; font-size:0.85em;">📍 Map</a>`;
             }
             if (!outLinks) outLinks = '<span style="color:var(--gray); font-size:0.8em">None</span>';
         }
@@ -1457,17 +1459,17 @@ async function loadAttendanceTable() {
             <td data-label="In Links">${inLinks}</td>
             <td data-label="Time Out"><span style="font-weight:600; color:var(--dark)">${att.timeOut ? formatTimeTo12h(att.timeOut) : '-'}</span></td>
             <td data-label="Out Links">${outLinks}</td>
-            <td data-label="Hours">${workedHours.toFixed(2)}h
+            <td data-label="Hrs">${workedHours !== null ? workedHours.toFixed(2) + 'h' : '-'}
                 ${att.slabMode && workedHours > globalSettings.standardHours ? '<span style="color:var(--warning); font-size: 0.8em"> (OT)</span>' : ''}
             </td>
             <td data-label="Mode">
-                <span style="padding: 2px 8px; border-radius: 4px; font-size: 0.8em; background: ${att.slabMode ? '#dcfce7; color: #166534' : '#e0e7ff; color: #3730a3'}">
-                    ${att.slabMode ? 'Slab' : 'Normal'}
+                <span style="padding: 2px 6px; border-radius: 4px; font-size: 0.75em; background: ${att.slabMode ? '#dcfce7; color: #166534' : '#e0e7ff; color: #3730a3'}">
+                    ${att.slabMode ? 'Slab' : 'Norm'}
                 </span>
             </td>
-            <td data-label="Salary (Est.)">₹${Math.round(computedPay)}</td>
+            <td data-label="Salary">${workedHours !== null ? '₹' + Math.round(computedPay) : '-'}</td>
             <td data-label="Fare">₹${fare}</td>
-            <td data-label="Total" style="font-weight: bold">₹${Math.round(total)}</td>
+            <td data-label="Total" style="font-weight: bold">${workedHours !== null ? '₹' + Math.round(total) : '₹' + Math.round(fare)}</td>
             <td data-label="Action">
                 <div class="action-buttons-stacked">
                     <button class="btn" style="background: var(--warning); color: white; padding: 0.25rem 0.5rem;" onclick="editAttendance('${att.id}')">✏️</button>
