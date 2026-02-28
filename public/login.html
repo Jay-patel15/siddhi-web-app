@@ -154,7 +154,7 @@
                 const res = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: 'admin', username, password })
+                    body: JSON.stringify({ username, password, type: 'admin' })
                 });
 
                 const data = await res.json();

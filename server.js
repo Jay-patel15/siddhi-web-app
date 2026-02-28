@@ -42,33 +42,39 @@ const upload = multer({ storage: storage });
 
 // LOGIN
 app.post('/api/login', async (req, res) => {
-    const { username, password, empName } = req.body;
+    const { username, password, empName, type } = req.body;
     const loginUser = (username || empName || '').toString().trim();
 
     // 1. Check Admin Hardcoded
-    if (loginUser.toLowerCase() === ADMIN_USERNAME.toLowerCase() && password === ADMIN_PASSWORD) {
-        return res.json({ success: true, role: 'admin', name: 'Administrator' });
+    if (type === 'admin') {
+        if (loginUser.toLowerCase() === ADMIN_USERNAME.toLowerCase() && password === ADMIN_PASSWORD) {
+            return res.json({ success: true, role: 'admin', name: 'Administrator' });
+        }
+        return res.status(401).json({ error: 'Invalid admin credentials' });
     }
 
     // 2. Check Employees DB
-    try {
-        const employees = await dbService.getAllEmployees();
-        // Match either Name or ID or customId (case insensitive, string comparison) and Password
-        const emp = employees.find(e => {
-            const nameMatch = e.name && e.name.toLowerCase() === loginUser.toLowerCase();
-            const idMatch = String(e.id) === loginUser;
-            const customIdMatch = String(e.customId) === loginUser;
-            return (nameMatch || idMatch || customIdMatch) && e.password === password;
-        });
+    if (type === 'employee' || !type) {
+        try {
+            const employees = await dbService.getAllEmployees();
+            // Match either Name or ID or customId (case insensitive, string comparison) and Password
+            const emp = employees.find(e => {
+                const nameMatch = e.name && e.name.toLowerCase() === loginUser.toLowerCase();
+                const idMatch = String(e.id) === loginUser;
+                const customIdMatch = String(e.customId) === loginUser;
+                return (nameMatch || idMatch || customIdMatch) && e.password === password;
+            });
 
-        if (emp) {
-            return res.json({ success: true, role: 'employee', name: emp.name, id: emp.id });
+            if (emp) {
+                return res.json({ success: true, role: 'employee', name: emp.name, id: emp.id });
+            }
+        } catch (e) {
+            console.error('Login DB Error:', e);
         }
-    } catch (e) {
-        console.error('Login DB Error:', e);
+        return res.status(401).json({ error: 'Invalid employee credentials' });
     }
 
-    res.status(401).json({ error: 'Invalid credentials' });
+    res.status(400).json({ error: 'Invalid login type' });
 });
 
 // EMPLOYEES
