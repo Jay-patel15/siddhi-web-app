@@ -131,6 +131,16 @@ app.get('/api/attendance', async (req, res) => {
 
 app.post('/api/attendance', async (req, res) => {
     try {
+        const { employeeId, date } = req.body;
+
+        // Block duplicates safely
+        if (employeeId && date) {
+            const isDuplicate = await dbService.checkDuplicateAttendance(employeeId, date);
+            if (isDuplicate) {
+                return res.status(400).json({ error: 'Duplicate Error: Attendance already marked for this employee on this date.' });
+            }
+        }
+
         const att = {
             id: Date.now().toString(),
             date: req.body.date,
@@ -303,6 +313,39 @@ app.post('/api/settings', async (req, res) => {
         const updated = await dbService.updateSettings(req.body);
         res.json(updated);
     } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/settings/storage-usage', async (req, res) => {
+    try {
+        const usage = await dbService.getStorageUsage();
+        res.json(usage);
+    } catch (e) {
+        console.error('Storage Usage Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/settings/database-usage', async (req, res) => {
+    try {
+        const usage = await dbService.getDatabaseUsageEstimate();
+        res.json(usage);
+    } catch (e) {
+        console.error('Database Usage Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/settings/import-data', async (req, res) => {
+    try {
+        const payload = req.body;
+        if (!payload) return res.status(400).json({ error: 'No data payload provided.' });
+
+        const results = await dbService.importData(payload);
+        res.json({ success: true, results });
+    } catch (e) {
+        console.error('Data Import Error:', e);
         res.status(500).json({ error: e.message });
     }
 });

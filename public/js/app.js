@@ -203,6 +203,9 @@ async function fetchHolidays() {
 function loadSettingsForm() {
     document.getElementById('set-standard-hours').value = globalSettings.standardHours;
     document.getElementById('set-slab-hours').value = globalSettings.slabHours;
+    // Fetch storage & DB stats when settings page is opened
+    fetchStorageUsage();
+    fetchDatabaseUsage();
 }
 
 document.getElementById('settings-form').addEventListener('submit', async (e) => {
@@ -232,6 +235,330 @@ async function resetSettings() {
     loadSettingsForm();
     alert('Settings Reset!');
 }
+
+async function fetchStorageUsage() {
+    const usedText = document.getElementById('storage-used-text');
+    const progressBar = document.getElementById('storage-progress-bar');
+    const fileCount = document.getElementById('storage-file-count');
+
+    if (!usedText || !progressBar) return;
+
+    try {
+        usedText.innerHTML = 'Calculating... <span style="font-size:0.8rem; color:var(--gray)">(This may take a moment)</span>';
+        const res = await fetch(`${API_URL}/settings/storage-usage`);
+        if (!res.ok) throw new Error('Failed to fetch storage');
+
+        const usage = await res.json();
+
+        usedText.innerText = `${usage.megabytes} MB Used`;
+        progressBar.style.width = `${Math.min(usage.percentageUsed, 100)}%`;
+        if (fileCount) fileCount.innerText = `Total Files in Storage: ${usage.fileCount || 0}`;
+
+        // Change color based on usage thresholds
+        if (usage.percentageUsed > 90) {
+            progressBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)'; // Red
+        } else if (usage.percentageUsed > 75) {
+            progressBar.style.background = 'linear-gradient(90deg, #f59e0b, #d97706)'; // Yellow/Orange
+        } else {
+            progressBar.style.background = 'linear-gradient(90deg, #10b981, #14b8a6)'; // Green
+        }
+
+    } catch (e) {
+        console.error(e);
+        usedText.innerText = 'Failed to load usage';
+    }
+}
+
+async function fetchDatabaseUsage() {
+    const usedText = document.getElementById('database-used-text');
+    const progressBar = document.getElementById('database-progress-bar');
+
+    if (!usedText || !progressBar) return;
+
+    try {
+        usedText.innerHTML = 'Calculating...';
+        const res = await fetch(`${API_URL}/settings/database-usage`);
+        if (!res.ok) throw new Error('Failed to fetch database usage');
+
+        const usage = await res.json();
+
+        // Show as MB or KB depending on size since text is usually small
+        const displayMB = usage.megabytes < 0.01 ? '< 0.01 MB' : `${usage.megabytes} MB`;
+
+        usedText.innerText = `${displayMB} Used`;
+        progressBar.style.width = `${Math.max(Math.min(usage.percentageUsed, 100), 1)}%`;
+
+        // Change color based on usage thresholds
+        if (usage.percentageUsed > 90) {
+            progressBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)'; // Red
+        } else if (usage.percentageUsed > 75) {
+            progressBar.style.background = 'linear-gradient(90deg, #f59e0b, #d97706)'; // Yellow/Orange
+        } else {
+            progressBar.style.background = 'linear-gradient(90deg, #3b82f6, #60a5fa)'; // Blue
+        }
+
+    } catch (e) {
+        console.error(e);
+        usedText.innerText = 'Failed to load database usage';
+    }
+}
+
+async function exportAllDataToExcel() {
+    try {
+        if (typeof XLSX === 'undefined') {
+            throw new Error('Excel library (SheetJS) is not loaded. Please refresh the page and try again.');
+        }
+
+        const btn = document.querySelector('[onclick="exportAllDataToExcel()"]');
+        const origText = btn.innerHTML;
+        btn.innerHTML = '⏳ Generating Excel...';
+        btn.disabled = true;
+
+        const startDateInput = document.getElementById('export-all-start-date').value || '2026-03-01';
+        const endDateInput = document.getElementById('export-all-end-date').value || '2050-12-31';
+
+        // Fetch fresh data
+        const [empRes, attRes, advRes, payRes] = await Promise.all([
+            fetch(`${API_URL}/employees`),
+            fetch(`${API_URL}/attendance`),
+            fetch(`${API_URL}/advances`),
+            fetch(`${API_URL}/payments`)
+        ]);
+
+        if (!empRes.ok || !attRes.ok || !advRes.ok || !payRes.ok) {
+            throw new Error('Failed to fetch data from the server.');
+        }
+
+        const employees = await empRes.json();
+        const attendance = await attRes.json();
+        const advances = await advRes.json();
+        const payments = await payRes.json();
+
+        // 1. Prepare Employee Data
+        const empData = employees.map(e => ({
+            "Employee ID": e.customId || e.id,
+            "Name": e.name,
+            "Contact": e.contact,
+            "Designation": e.designation,
+            "Daily Salary": e.salary,
+            "Standard Hours": e.normalHours || globalSettings.standardHours,
+            "Slab Hours": e.slabBaseHours || globalSettings.slabHours
+        }));
+
+        // 2. Prepare Attendance Data (Filtered)
+        const filteredAtt = attendance.filter(a => a.date >= startDateInput && a.date <= endDateInput);
+        const attData = filteredAtt.map(a => ({
+            "Record ID": a.id,
+            "Date": a.date,
+            "Employee ID": a.employeeId,
+            "Employee Name": a.employeeName,
+            "Time In": a.timeIn,
+            "Time Out": a.timeOut,
+            "Worked Hours": a.workedHours,
+            "Calculated Fare": a.fare
+        }));
+
+        // 3. Prepare Advances Data (Filtered by date or month)
+        const startMonthStr = startDateInput.substring(0, 7);
+        const endMonthStr = endDateInput.substring(0, 7);
+        const filteredAdv = advances.filter(a => {
+            if (a.deductionMonth) {
+                return a.deductionMonth >= startMonthStr && a.deductionMonth <= endMonthStr;
+            } else {
+                return a.date >= startDateInput && a.date <= endDateInput;
+            }
+        });
+
+        const advData = filteredAdv.map(a => ({
+            "Record ID": a.id,
+            "Date": a.date,
+            "Employee ID": a.employeeId,
+            "Amount": a.amount,
+            "Deduction Month": a.deductionMonth,
+            "Mode": a.mode,
+            "Notes": a.notes
+        }));
+
+        // 4. Prepare Payments Data (Filtered)
+        const filteredPay = payments.filter(p => {
+            if (p.salaryMonth) {
+                return p.salaryMonth >= startMonthStr && p.salaryMonth <= endMonthStr;
+            } else {
+                return p.date >= startDateInput && p.date <= endDateInput;
+            }
+        });
+        const payData = filteredPay.map(p => ({
+            "Record ID": p.id,
+            "Date": p.date,
+            "Employee ID": p.employeeId,
+            "Salary Month": p.salaryMonth,
+            "Amount": p.amount,
+            "Mode": p.mode,
+            "Notes": p.notes
+        }));
+
+        // Convert JSON to Worksheets
+        const wsEmp = XLSX.utils.json_to_sheet(empData);
+        const wsAtt = XLSX.utils.json_to_sheet(attData);
+        const wsAdv = XLSX.utils.json_to_sheet(advData);
+        const wsPay = XLSX.utils.json_to_sheet(payData);
+
+        // Define column widths for better readability
+        const wscols = [{ wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+        wsEmp['!cols'] = wscols;
+        wsAtt['!cols'] = wscols;
+        wsAdv['!cols'] = wscols;
+        wsPay['!cols'] = wscols;
+
+        // Create Workbook and Append Sheets
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, wsEmp, "Employee");
+        XLSX.utils.book_append_sheet(wb, wsAtt, "Attendance");
+        XLSX.utils.book_append_sheet(wb, wsAdv, "advance");
+        XLSX.utils.book_append_sheet(wb, wsPay, "Payments");
+
+        // Trigger Download
+        const backupName = `Siddhi_Data_Backup_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, backupName);
+
+        btn.innerHTML = '✅ Export Successful';
+        setTimeout(() => {
+            btn.innerHTML = origText;
+            btn.disabled = false;
+        }, 3000);
+
+    } catch (e) {
+        console.error("Export Error: ", e);
+        alert('Failed to export data: ' + e.message);
+        const btn = document.querySelector('[onclick="exportAllDataToExcel()"]');
+        if (btn) {
+            btn.innerHTML = '❌ Export Failed';
+            btn.disabled = false;
+        }
+    }
+}
+
+async function importExcelData() {
+    const fileInput = document.getElementById('import-excel-file');
+    const file = fileInput.files[0];
+    if (!file) {
+        alert("Please select an Excel (.xlsx) file to upload.");
+        return;
+    }
+
+    if (typeof XLSX === 'undefined') {
+        alert("Excel library is not loaded. Please refresh.");
+        return;
+    }
+
+    const btn = document.querySelector('[onclick="importExcelData()"]');
+    const origText = btn.innerHTML;
+    btn.innerHTML = '⏳ Processing Data...';
+    btn.disabled = true;
+
+    try {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+
+                // Extraction Helpers
+                const getSheetData = (sheetName) => {
+                    const ws = workbook.Sheets[sheetName];
+                    return ws ? XLSX.utils.sheet_to_json(ws) : [];
+                };
+
+                const rawEmp = getSheetData("Employee");
+                const rawAtt = getSheetData("Attendance");
+                const rawAdv = getSheetData("advance");
+                const rawPay = getSheetData("Payments");
+
+                // Mapping functions from human-readable Excel headers back to DB JSON Schema
+                const mapEmployees = rawEmp.map(r => ({
+                    id: r["Employee ID"] ? r["Employee ID"].toString() : Date.now().toString() + Math.random().toString().slice(2, 6),
+                    customId: r["Employee ID"],
+                    name: r["Name"],
+                    contact: r["Contact"],
+                    designation: r["Designation"] || 'Worker',
+                    salary: r["Daily Salary"] || 0,
+                    normalHours: r["Standard Hours"],
+                    slabBaseHours: r["Slab Hours"],
+                    joiningDate: new Date().toISOString().split('T')[0]
+                })).filter(e => e.name);
+
+                const mapAttendance = rawAtt.map(r => ({
+                    id: r["Record ID"] ? r["Record ID"].toString() : Date.now().toString() + Math.random().toString().slice(2, 6),
+                    date: r["Date"],
+                    employeeId: r["Employee ID"]?.toString(),
+                    employeeName: r["Employee Name"],
+                    timeIn: r["Time In"],
+                    timeOut: r["Time Out"],
+                    workedHours: r["Worked Hours"] || 0,
+                    fare: r["Calculated Fare"] || 0
+                })).filter(a => a.employeeId && a.date);
+
+                const mapAdvances = rawAdv.map(r => ({
+                    id: r["Record ID"] ? r["Record ID"].toString() : Date.now().toString() + Math.random().toString().slice(2, 6),
+                    date: r["Date"],
+                    employeeId: r["Employee ID"]?.toString(),
+                    amount: r["Amount"],
+                    deductionMonth: r["Deduction Month"] || null,
+                    mode: r["Mode"] || 'Cash',
+                    notes: r["Notes"] || ''
+                })).filter(a => a.employeeId && a.amount);
+
+                const mapPayments = rawPay.map(r => ({
+                    id: r["Record ID"] ? r["Record ID"].toString() : Date.now().toString() + Math.random().toString().slice(2, 6),
+                    date: r["Date"],
+                    employeeId: r["Employee ID"]?.toString(),
+                    salaryMonth: r["Salary Month"],
+                    amount: r["Amount"],
+                    mode: r["Mode"] || 'Cash',
+                    notes: r["Notes"] || ''
+                })).filter(p => p.employeeId && p.amount);
+
+                const payload = {
+                    employees: mapEmployees,
+                    attendance: mapAttendance,
+                    advances: mapAdvances,
+                    payments: mapPayments
+                };
+
+                const res = await fetch(`${API_URL}/settings/import-data`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const apiData = await res.json();
+
+                if (res.ok && apiData.success) {
+                    alert(`✅ Import Successful!\n\nEmployees: ${apiData.results.employees}\nAttendance: ${apiData.results.attendance}\nAdvances: ${apiData.results.advances}\nPayments: ${apiData.results.payments}`);
+                    fileInput.value = "";
+                    loadSettingsForm(); // refresh stats
+                } else {
+                    throw new Error(apiData.error || "Unknown error during import");
+                }
+            } catch (err) {
+                console.error("Parse/Import Error:", err);
+                alert("Import failed: " + err.message);
+            } finally {
+                btn.innerHTML = origText;
+                btn.disabled = false;
+            }
+        };
+
+        reader.readAsArrayBuffer(file);
+
+    } catch (e) {
+        console.error("File Read Error:", e);
+        alert("Failed to read file.");
+        btn.innerHTML = origText;
+        btn.disabled = false;
+    }
+}
+
 
 // --- DASHBOARD ---
 async function loadDashboard() {
@@ -2753,9 +3080,9 @@ window.downloadPreviewImage = downloadPreviewImage;
 
 // MOMENT OF TRUTH: Factory Reset
 window.confirmFactoryReset = async function () {
-    if (!confirm("WARNING: This will delete ALL data (Employees, Attendance, Payments, Advances, Uploads). This action cannot be undone. Are you sure?")) return;
+    if (!confirm("WARNING: This will delete ALL TABLE DATA (Employees, Attendance, Payments, Advances). Uploaded Images/Files will NOT be deleted. This action cannot be undone. Are you sure?")) return;
 
-    const password = prompt("Please enter Admin Password to confirm Factory Reset:");
+    const password = prompt("Please enter Admin Password to confirm Data Reset:");
     if (!password) return;
 
     try {

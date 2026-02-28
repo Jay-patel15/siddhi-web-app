@@ -10,6 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+    <!-- SheetJS for Excel exports -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 
 <body>
@@ -478,12 +480,109 @@
 
             <hr style="margin: 2rem 0; border: 0; border-top: 1px solid #e2e8f0;">
 
+            <div class="card" id="storage-tracker-card" style="margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0;">📦 Storage Usage</h3>
+                    <button class="btn"
+                        style="background: var(--light); border: 1px solid var(--gray); font-size: 0.85rem;"
+                        onclick="fetchStorageUsage()">Refresh</button>
+                </div>
+                <p style="color: var(--gray); font-size: 0.9rem; margin-bottom: 1rem;">Free tier limit is 1 GB for
+                    uploaded files (Images/PDFs).</p>
+
+                <div style="background: var(--light); border-radius: 8px; padding: 1rem; border: 1px solid #e2e8f0;">
+                    <div
+                        style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-weight: 500;">
+                        <span id="storage-used-text">Loading...</span>
+                        <span id="storage-limit-text">1024 MB Limit</span>
+                    </div>
+                    <div
+                        style="width: 100%; background-color: #e0e7ff; border-radius: 20px; height: 12px; overflow: hidden;">
+                        <div id="storage-progress-bar"
+                            style="width: 0%; height: 100%; background: linear-gradient(90deg, #10b981, #14b8a6); transition: width 0.5s ease-in-out, background-color 0.5s;">
+                        </div>
+                    </div>
+                    <div id="storage-file-count"
+                        style="text-align: right; font-size: 0.8rem; color: var(--gray); margin-top: 0.5rem;">Total
+                        Files: 0</div>
+                </div>
+            </div>
+
+            <div class="card" id="database-tracker-card" style="margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0;">🗄️ Database Size Usage</h3>
+                    <button class="btn"
+                        style="background: var(--light); border: 1px solid var(--gray); font-size: 0.85rem;"
+                        onclick="fetchDatabaseUsage()">Refresh</button>
+                </div>
+                <p style="color: var(--gray); font-size: 0.9rem; margin-bottom: 1rem;">Free tier limit is 500 MB for
+                    text and data tables.</p>
+
+                <div style="background: var(--light); border-radius: 8px; padding: 1rem; border: 1px solid #e2e8f0;">
+                    <div
+                        style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-weight: 500;">
+                        <span id="database-used-text">Loading...</span>
+                        <span id="database-limit-text">500 MB Limit</span>
+                    </div>
+                    <div
+                        style="width: 100%; background-color: #e0e7ff; border-radius: 20px; height: 12px; overflow: hidden;">
+                        <div id="database-progress-bar"
+                            style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.5s ease-in-out, background-color 0.5s;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EXCEL DATA EXPORT CARD -->
+            <div class="card" style="margin-bottom: 2rem; border-left: 4px solid var(--primary);">
+                <h3 style="margin-top: 0;">📥 Download All Data (Excel Export) 1 march 26</h3>
+                <p style="color: var(--gray); font-size: 0.9rem; margin-bottom: 1.5rem;">Export your Employees,
+                    Attendance, Advances, and Payments into separated tabs in an Excel file.</p>
+
+                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; max-width: 400px; flex-wrap: wrap;">
+                    <div class="form-group" style="flex: 1; min-width: 140px;">
+                        <label style="font-weight: 600;">From Date</label>
+                        <input type="date" id="export-all-start-date" value="2026-03-01">
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 140px;">
+                        <label style="font-weight: 600;">To Date</label>
+                        <input type="date" id="export-all-end-date" value="2026-03-31">
+                    </div>
+                </div>
+
+                <button class="btn btn-primary"
+                    style="width: 100%; padding: 1rem; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"
+                    onclick="exportAllDataToExcel()">
+                    <span style="font-size: 1.3rem;">⬇️</span> Download All Data (Excel)
+                </button>
+            </div>
+
+            <!-- EXCEL DATA IMPORT CARD -->
+            <div class="card" style="margin-bottom: 2rem; border-left: 4px solid var(--primary);">
+                <h3 style="margin-top: 0;">📤 Upload Data (Excel Import)</h3>
+                <p style="color: var(--gray); font-size: 0.9rem; margin-bottom: 1.5rem;">Upload a previously downloaded
+                    Siddhi Excel file to restore or add data to the system.</p>
+
+                <div class="form-group" style="max-width: 400px; margin-bottom: 1.5rem;">
+                    <label style="font-weight: 600;">Select Excel File (.xlsx)</label>
+                    <input type="file" id="import-excel-file" accept=".xlsx, .xls">
+                    <small style="color: var(--gray); display: block; margin-top: 0.5rem;">Data will be intelligently
+                        merged automatically.</small>
+                </div>
+
+                <button class="btn btn-primary"
+                    style="width: 100%; padding: 1rem; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"
+                    onclick="importExcelData()">
+                    <span style="font-size: 1.3rem;">⬆️</span> Upload & Import Data
+                </button>
+            </div>
+
             <div class="card" style="background: #fff1f2; border: 1px solid #fecdd3;">
                 <h4 style="color: #be123c; margin-top: 0;">Danger Zone</h4>
                 <p style="color: #be123c; font-size: 0.9rem; margin-bottom: 1rem;">Destructive actions. Proceed with
                     caution.</p>
-                <button class="btn" style="background: #e11d48; color: white;" onclick="confirmFactoryReset()">⚠ Factory
-                    Reset (Clear All Data)</button>
+                <button class="btn" style="background: #e11d48; color: white;" onclick="confirmFactoryReset()">⚠ Clear
+                    Table Data (Keep Images)</button>
             </div>
 
         </section>

@@ -98,6 +98,20 @@ const getAttendanceById = async (id) => {
     });
 };
 
+const checkDuplicateAttendance = async (employeeId, date) => {
+    return retry(async () => {
+        const { data, error } = await supabase
+            .from('attendance')
+            .select('id')
+            .eq('employeeId', employeeId)
+            .eq('date', date)
+            .limit(1);
+
+        if (error) throw new Error(error.message);
+        return data && data.length > 0;
+    });
+};
+
 const createAttendance = async (attendance) => {
     const { data, error } = await supabase.from('attendance').insert([attendance]).select().single();
     if (error) throw new Error(error.message);
@@ -283,6 +297,55 @@ const uploadFile = async (fileBuffer, fileName, mimeType) => {
     }, 2, 1000); // Max 2 retries, 1s delay
 };
 
+const getStorageUsage = async () => {
+    return retry(async () => {
+        // List all files in the 'uploads' bucket
+        // The list function returns a maximum of 100 items by default.
+        // For a complete count we need to handle pagination if there are more than 100
+        let allFiles = [];
+        let offset = 0;
+        const limit = 100;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabase.storage
+                .from('uploads')
+                .list('', {
+                    limit: limit,
+                    offset: offset,
+                    sortBy: { column: 'name', order: 'asc' },
+                });
+
+            if (error) throw new Error(error.message);
+
+            if (data && data.length > 0) {
+                allFiles = allFiles.concat(data);
+                offset += limit;
+                // If we got fewer items than the limit, we've reached the end
+                if (data.length < limit) {
+                    hasMore = false;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+
+        // Add up the sizes of all files in bytes
+        const totalBytes = allFiles.reduce((sum, file) => sum + (file.metadata?.size || 0), 0);
+
+        // Convert to Megabytes (MB)
+        const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
+
+        return {
+            bytes: totalBytes,
+            megabytes: totalMB,
+            limitMB: 1024, // Supabase Free tier limit is 1GB
+            percentageUsed: ((totalMB / 1024) * 100).toFixed(2),
+            fileCount: allFiles.length
+        };
+    });
+};
+
 const deleteFile = async (pathOrUrl) => {
     if (!pathOrUrl) return;
 
@@ -301,6 +364,88 @@ const deleteFile = async (pathOrUrl) => {
     });
 };
 
+const getDatabaseUsageEstimate = async () => {
+    return retry(async () => {
+        // Fetch a rough count/sample of all main tables
+        // There's no direct way to get raw DB size from the free tier REST API.
+        // We'll approximate by pulling all records (which we already do for dashboard)
+        // and sizing the JSON.
+
+        const [emp, att, adv, pay] = await Promise.all([
+            supabase.from('employees').select('*'),
+            supabase.from('attendance').select('*'),
+            supabase.from('advances').select('*'),
+            supabase.from('payments').select('*')
+        ]);
+
+        let totalBytes = 0;
+
+        const sizeOf = (obj) => obj && !obj.error ? JSON.stringify(obj.data).length : 0;
+
+        // Count approximate JSON bytes
+        totalBytes += sizeOf(emp);
+        totalBytes += sizeOf(att);
+        totalBytes += sizeOf(adv);
+        totalBytes += sizeOf(pay);
+
+        // Add Postgres overhead multiplier (approx 2x-3x for indexes/bloat)
+        const estimatedBytes = totalBytes * 2.5;
+
+        const totalMB = (estimatedBytes / (1024 * 1024)).toFixed(3);
+        const limitMB = 500; // Supabase Free tier DB limit
+
+        return {
+            bytes: estimatedBytes,
+            megabytes: totalMB,
+            limitMB: limitMB,
+            percentageUsed: ((totalMB / limitMB) * 100).toFixed(4)
+        };
+    });
+};
+
+const importData = async (payload) => {
+    return retry(async () => {
+        const { employees, attendance, advances, payments } = payload;
+
+        let results = {
+            employees: 0,
+            attendance: 0,
+            advances: 0,
+            payments: 0
+        };
+
+        // Employees
+        if (employees && employees.length > 0) {
+            const { error } = await supabase.from('employees').upsert(employees, { onConflict: 'id' });
+            if (error) throw new Error("Employee Import Error: " + error.message);
+            results.employees = employees.length;
+        }
+
+        // Attendance
+        if (attendance && attendance.length > 0) {
+            const { error } = await supabase.from('attendance').upsert(attendance, { onConflict: 'id' });
+            if (error) throw new Error("Attendance Import Error: " + error.message);
+            results.attendance = attendance.length;
+        }
+
+        // Advances
+        if (advances && advances.length > 0) {
+            const { error } = await supabase.from('advances').upsert(advances, { onConflict: 'id' });
+            if (error) throw new Error("Advances Import Error: " + error.message);
+            results.advances = advances.length;
+        }
+
+        // Payments
+        if (payments && payments.length > 0) {
+            const { error } = await supabase.from('payments').upsert(payments, { onConflict: 'id' });
+            if (error) throw new Error("Payments Import Error: " + error.message);
+            results.payments = payments.length;
+        }
+
+        return results;
+    });
+};
+
 module.exports = {
     supabase,
     getAllEmployees,
@@ -313,6 +458,7 @@ module.exports = {
     createAttendance,
     updateAttendance,
     deleteAttendance,
+    checkDuplicateAttendance,
     getAllAdvances,
     getAdvanceById,
     createAdvance,
@@ -327,5 +473,8 @@ module.exports = {
     setHolidays,
     factoryReset,
     uploadFile,
+    getStorageUsage,
+    getDatabaseUsageEstimate,
+    importData,
     deleteFile
 };
