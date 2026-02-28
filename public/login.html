@@ -37,7 +37,14 @@
             </div>
             <div class="form-group">
                 <label>Password</label>
-                <input type="password" id="admin-password" placeholder="Enter password" required>
+                <div style="position: relative;">
+                    <input type="password" id="admin-password" placeholder="Enter password" required
+                        style="width: 100%; box-sizing: border-box; padding-right: 40px;">
+                    <button type="button" onclick="togglePasswordVisibility('admin-password', this)"
+                        style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--gray); font-size: 1.1rem; padding: 0;">
+                        👁️
+                    </button>
+                </div>
             </div>
             <button type="submit" class="btn btn-admin">
                 Login as Admin
@@ -52,7 +59,14 @@
             </div>
             <div class="form-group">
                 <label>Password</label>
-                <input type="password" id="emp-password" placeholder="Enter password given by admin" required>
+                <div style="position: relative;">
+                    <input type="password" id="emp-password" placeholder="Enter password given by admin" required
+                        style="width: 100%; box-sizing: border-box; padding-right: 40px;">
+                    <button type="button" onclick="togglePasswordVisibility('emp-password', this)"
+                        style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--gray); font-size: 1.1rem; padding: 0;">
+                        👁️
+                    </button>
+                </div>
             </div>
             <button type="submit" class="btn btn-primary">
                 Login as Employee
@@ -205,6 +219,17 @@
             localStorage.setItem('darkMode', isDark);
             const btn = document.getElementById('login-dark-btn');
             if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+        }
+
+        function togglePasswordVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.innerText = '🙈';
+            } else {
+                input.type = 'password';
+                btn.innerText = '👁️';
+            }
         }
 
         initDarkMode();

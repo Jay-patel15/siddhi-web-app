@@ -1056,10 +1056,12 @@
                     </button>
 
                     <div class="action-btns">
-                        <button id="btn-check-in" class="btn-checkin" onclick="startAttendanceFlow('in')">
+                        <button id="btn-check-in" class="btn-checkin" onclick="startAttendanceFlow('in')" disabled
+                            style="opacity: 0.5; cursor: not-allowed;">
                             🔒 Check In
                         </button>
-                        <button id="btn-check-out" class="btn-checkout" onclick="startAttendanceFlow('out')">
+                        <button id="btn-check-out" class="btn-checkout" onclick="startAttendanceFlow('out')" disabled
+                            style="display: none;">
                             🔓 Check Out
                         </button>
                     </div>
@@ -1379,22 +1381,36 @@
                         isMocked: pos.coords.isMocked || pos.mocked || false
                     }),
                     (err) => {
-                        let msg = "❌ Location error.";
+                        let msg = "❌ Location error. Turn on GPS and try again.";
                         if (err.code === 1) msg = "❌ Location permission denied.";
+                        else if (err.code === 2) msg = "❌ Position unavailable. Turn on GPS and try again.";
+                        else if (err.code === 3) msg = "❌ Location request timed out.";
                         reject(new Error(msg));
                     },
-                    { enableHighAccuracy: false, timeout: 5000, maximumAge: 10000 }
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 );
             });
         }
 
+        function getLocalDateString() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
         function updateAttendanceButtons() {
-            const today = new Date().toISOString().split('T')[0];
-            const todayRecord = allData.attendance.find(a => a.employeeId === currentEmployee.id && a.date === today);
+            const today = getLocalDateString();
+            const todayRecord = allData.attendance.find(a => String(a.employeeId) === String(currentEmployee.id) && a.date === today);
             const btnIn = document.getElementById('btn-check-in');
             const btnOut = document.getElementById('btn-check-out');
             const statusMsg = document.getElementById('attendance-status');
             const instr = document.getElementById('attendance-instruction');
+
+            // Reset styles
+            btnIn.style.opacity = '1'; btnIn.style.cursor = 'pointer';
+            btnOut.style.opacity = '1'; btnOut.style.cursor = 'pointer';
 
             btnIn.disabled = false; btnOut.disabled = true;
             btnIn.style.display = 'flex'; btnOut.style.display = 'flex';
@@ -1402,11 +1418,14 @@
 
             if (!todayRecord) {
                 btnIn.disabled = false; btnOut.disabled = true;
+                btnOut.style.display = 'none'; // hide until checked in
                 instr.innerText = "Check in to start your work today.";
+                btnIn.innerHTML = "🔒 Check In";
             } else if (todayRecord.timeIn && !todayRecord.timeOut) {
                 btnIn.disabled = true; btnOut.disabled = false;
+                btnIn.style.display = 'none'; // hide check in
                 instr.innerText = "Working... Remember to check out.";
-                btnIn.innerHTML = "✅ Checked In";
+                btnOut.innerHTML = "🔓 Check Out";
             } else {
                 btnIn.disabled = true; btnOut.disabled = true;
                 btnIn.innerHTML = "✅ Checked In"; btnOut.innerHTML = "✅ Checked Out";
@@ -1494,14 +1513,14 @@
                 const hh = now.getHours().toString().padStart(2, '0');
                 const mm = now.getMinutes().toString().padStart(2, '0');
                 const timeStr = `${hh}:${mm}`;
-                const dateStr = now.toISOString().split('T')[0];
+                const dateStr = getLocalDateString();
                 let res, savedRecord;
 
                 if (type === 'in') {
                     // Step 1: Save attendance record (without base64 — photo uploaded separately)
                     const att = {
                         date: dateStr,
-                        employeeId: currentEmployee.id,
+                        employeeId: String(currentEmployee.id),
                         employeeName: currentEmployee.name,
                         timeIn: timeStr,
                         checkInLoc: location ? { lat: location.lat, lng: location.lng, accuracy: location.accuracy } : null,
@@ -1529,7 +1548,7 @@
                         });
                     }
                 } else {
-                    const todayRecord = allData.attendance.find(a => a.employeeId === currentEmployee.id && a.date === dateStr);
+                    const todayRecord = allData.attendance.find(a => String(a.employeeId) === String(currentEmployee.id) && a.date === dateStr);
                     if (!todayRecord) throw new Error("Check-in record not found");
                     const workedHours = ((now - parseTime(todayRecord.timeIn)) / (1000 * 60 * 60)).toFixed(2);
 

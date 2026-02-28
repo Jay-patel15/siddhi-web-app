@@ -12,6 +12,24 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
     <!-- SheetJS for Excel exports -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script>
+        // Strictly prevent employees from seeing the admin page layout
+        (function () {
+            const sessionStr = localStorage.getItem('payroll_session');
+            if (!sessionStr) {
+                window.location.href = 'login.html';
+                return;
+            }
+            try {
+                const session = JSON.parse(sessionStr);
+                if (session.role === 'employee') {
+                    window.location.replace('employee-portal.html');
+                }
+            } catch (e) {
+                // Ignore, let app.js handle corrupt sessions
+            }
+        })();
+    </script>
 </head>
 
 <body>
