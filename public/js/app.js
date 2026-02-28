@@ -1523,7 +1523,7 @@ async function loadEmployees() {
             <td data-label="Actions">
                 <div class="action-buttons">
                     <button class="btn" style="background: var(--warning); color: white; padding: 0.25rem 0.5rem;" onclick="editEmployee('${emp.id}')">✏️</button>
-                    <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;" onclick="deleteEmployee('${emp.id}')">🗑️</button>
+                    <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;" onclick="deleteEmployee('${emp.id}', \`${emp.name}\`)">🗑️</button>
                 </div>
             </td>
         `;
@@ -1556,10 +1556,27 @@ function resetEmployeeForm() {
     document.getElementById('emp-cancel-btn').style.display = 'none';
 }
 
-async function deleteEmployee(id) {
-    if (!confirm("Delete employee? This will not remove their historical attendance.")) return;
-    await fetch(`${API_URL}/employees/${id}`, { method: 'DELETE' });
-    loadEmployees();
+async function deleteEmployee(id, name) {
+    const confirmationText = `Delete ${name}`;
+    const userInput = prompt(`⚠️ WARNING: IRREVERSIBLE ACTION ⚠️\n\nDeleting this employee will permanently erase ALL their Attendance, Advance Payments, and Uploads.\n\nTo confirm, type exactly: ${confirmationText}`);
+
+    if (userInput !== confirmationText) {
+        if (userInput !== null) {
+            alert("Deletion cancelled. The text you typed did not match the confirmation exactly.");
+        }
+        return;
+    }
+
+    if (!confirm(`Are you absolutely sure you want to delete ${name} and completely wipe their history from the database?`)) return;
+
+    try {
+        await fetch(`${API_URL}/employees/${id}`, { method: 'DELETE' });
+        loadEmployees();
+        alert(`Successfully deleted ${name} and all associated records.`);
+    } catch (err) {
+        console.error("Deletion failed:", err);
+        alert("Failed to delete employee: " + err.message);
+    }
 }
 
 document.getElementById('employee-form').addEventListener('submit', async (e) => {
@@ -1727,6 +1744,11 @@ async function loadAttendanceTable() {
         .filter(a => a.date.startsWith(monthInput))
         .filter(a => !empFilter || a.employeeId == empFilter)
         .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; color: var(--gray); padding: 2rem;">No attendance records found for this selection.</td></tr>';
+        return;
+    }
 
     filtered.forEach(att => {
         const emp = empMap[att.employeeId];
@@ -2027,7 +2049,12 @@ async function loadAdvanceForm() {
 }
 
 async function loadAdvanceTable() {
-    let monthFilter = document.getElementById('adv-filter-month').value;
+    let monthInput = document.getElementById('adv-filter-month');
+    if (!monthInput.value) {
+        const now = new Date();
+        monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+    let monthFilter = monthInput.value;
     const empFilter = document.getElementById('adv-filter-employee') ? document.getElementById('adv-filter-employee').value : '';
 
     const [advRes, empRes] = await Promise.all([
@@ -2048,6 +2075,11 @@ async function loadAdvanceTable() {
 
     const tbody = document.getElementById('advance-table-body');
     tbody.innerHTML = '';
+
+    if (sorted.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--gray); padding: 2rem;">No advance records found for this selection.</td></tr>';
+        return;
+    }
 
     sorted.forEach(adv => {
         const empName = empMap[adv.employeeId] ? empMap[adv.employeeId].name : 'Unknown';
@@ -2161,6 +2193,11 @@ async function loadPayroll() {
 
     const grid = document.getElementById('payroll-grid');
     grid.innerHTML = '';
+
+    if (payroll.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--gray); padding: 2rem; background: var(--white); border-radius: 12px; border: 1px solid #e2e8f0;">No salary records found for this selection.</div>';
+        return;
+    }
 
     payroll.forEach(p => {
         // Fallbacks for undefined (in case server wasn't restarted)
@@ -2527,7 +2564,12 @@ async function loadUploadsPage() {
         uploadsData = uploads;
 
         // Apply month filter if set
-        const filterMonth = document.getElementById('uploads-filter-month').value;
+        let monthInput = document.getElementById('uploads-filter-month');
+        if (!monthInput.value) {
+            const now = new Date();
+            monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        }
+        const filterMonth = monthInput.value;
         const filteredUploads = filterMonth
             ? uploads.filter(u => u.date && u.date.startsWith(filterMonth))
             : uploads;
@@ -2544,12 +2586,14 @@ async function loadUploadsPage() {
         // Create employee cards
         grid.innerHTML = '';
 
-        if (employees.length === 0) {
-            grid.innerHTML = '<p style="color: var(--gray); text-align: center;">No employees found. Add employees first.</p>';
+        const activeEmployees = employees.filter(emp => (uploadsByEmployee[emp.id] || []).length > 0);
+
+        if (activeEmployees.length === 0) {
+            grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--gray); padding: 2rem; background: var(--white); border-radius: 12px; border: 1px solid #e2e8f0;">No uploads found for this selection.</div>';
             return;
         }
 
-        employees.forEach(emp => {
+        activeEmployees.forEach(emp => {
             const empUploads = uploadsByEmployee[emp.id] || [];
             const card = document.createElement('div');
             card.className = 'card';
@@ -3179,14 +3223,9 @@ function _renderAttPhotoCards() {
     container.innerHTML = '';
 
     if (_attPhotoEmployees.length === 0) {
-        container.innerHTML = '<p style="color:var(--gray); text-align:center; padding:2rem;">No employees found.</p>';
+        container.innerHTML = '<p style="color:var(--gray); text-align:center; padding:2rem; grid-column: 1 / -1;">No employees found.</p>';
         return;
     }
-
-    const grid = document.createElement('div');
-    grid.className = 'dashboard-grid';
-    grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(250px, 1fr))';
-    container.appendChild(grid);
 
     _attPhotoEmployees.forEach(emp => {
         const empPhotos = byEmp[emp.id] || byEmp[emp.name] || [];
@@ -3199,23 +3238,23 @@ function _renderAttPhotoCards() {
         card.onclick = () => openAttPhotoGallery(emp.id, emp.name);
 
         card.innerHTML = `
-            <div style="display:flex; align-items:center; gap:1rem;">
-                <div style="width:60px; height:60px; border-radius:50%; background:linear-gradient(135deg, var(--primary), var(--secondary)); display:flex; align-items:center; justify-content:center; font-size:1.5rem; color:white; font-weight:bold; flex-shrink:0;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--secondary)); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: white; font-weight: bold; flex-shrink: 0;">
                     ${emp.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                    <h4 style="margin:0;">${emp.name}</h4>
-                    <p style="margin:0.25rem 0 0; color:var(--gray); font-size:0.9rem;">${emp.phone || 'No phone'}</p>
+                    <h4 style="margin: 0;">${emp.name}</h4>
+                    <p style="margin: 0.25rem 0 0 0; color: var(--gray); font-size: 0.9rem;">${emp.phone || 'No phone'}</p>
                 </div>
             </div>
-            <div style="margin-top:1rem; display:flex; justify-content:space-between; align-items:center;">
+            <div style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">
                 <div>
-                    <span style="font-size:2rem; font-weight:bold; color:var(--primary);">${empPhotos.length}</span>
-                    <span style="color:var(--gray);"> photos</span>
+                    <span style="font-size: 2rem; font-weight: bold; color: var(--primary);">${empPhotos.length}</span>
+                    <span style="color: var(--gray);"> photos</span>
                 </div>
-                <button class="btn btn-primary" style="padding:0.5rem 1rem; font-size:0.85rem;">View →</button>
+                <button class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.85rem;">View →</button>
             </div>`;
-        grid.appendChild(card);
+        container.appendChild(card);
     });
 }
 

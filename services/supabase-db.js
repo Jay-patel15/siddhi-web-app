@@ -74,6 +74,21 @@ const updateEmployee = async (id, employee) => {
 
 const deleteEmployee = async (id) => {
     return retry(async () => {
+        // 1. Delete associated Attendance
+        await supabase.from('attendance').delete().eq('employeeId', id);
+
+        // 2. Delete associated Advances
+        await supabase.from('advances').delete().eq('employeeId', id);
+
+        // 3. Delete associated Payments
+        await supabase.from('payments').delete().eq('employeeId', id);
+
+        // 4. Delete associated Uploads (metadata out of DB)
+        // (Note: To keep this safe/simple without tracking raw bucket file tokens in a single transaction, 
+        // we just drop the DB metadata. Or we can leave orphan images. The request is DB wipe.)
+        await supabase.from('uploads').delete().eq('employeeId', id);
+
+        // 5. Finally, Delete the Employee record itself
         const { error } = await supabase.from('employees').delete().eq('id', id);
         if (error) throw new Error(error.message);
         return { success: true };

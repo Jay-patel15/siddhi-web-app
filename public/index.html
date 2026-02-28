@@ -21,9 +21,19 @@
 
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
-        <div class="brand" style="display: flex; align-items: center; gap: 10px;">
-            <img src="assets/logo-horizontal.png" alt="Siddhi Electricals" style="height: 40px; width: auto;">
-            <span>Siddhi Electricals</span>
+        <div class="brand" style="display: flex; align-items: center; gap: 12px; margin-bottom: 2.5rem;">
+            <!-- Crop container for the lightbulb icon from the flat logo -->
+            <div
+                style="width: 45px; height: 55px; overflow: hidden; display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0;">
+                <img src="assets/logo-horizontal.png" alt="Icon" style="height: 55px; width: auto; max-width: none;">
+            </div>
+            <!-- Stacked brand text -->
+            <div style="display: flex; flex-direction: column; line-height: 1.15;">
+                <span
+                    style="color: var(--primary); font-size: 1.5rem; font-weight: 800; letter-spacing: 0.5px;">Siddhi</span>
+                <span
+                    style="color: var(--primary); font-size: 1.5rem; font-weight: 800; letter-spacing: 0.5px;">Electricals</span>
+            </div>
         </div>
         <ul class="nav-links">
             <li class="nav-item active" onclick="showSection('dashboard')">🏠 Dashboard</li>
@@ -81,10 +91,7 @@
             <button class="hamburger-btn" onclick="toggleSidebar()"
                 style="display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">☰</button>
             <div>
-                <h1 id="page-title" style="display: flex; align-items: center; gap: 10px;">
-                    <img src="assets/logo-vertical.jpg" alt="Logo" style="height: 30px; width: auto;">
 
-                </h1>
                 <p class="subtitle">Welcome to your payroll management system</p>
             </div>
         </header>
@@ -591,21 +598,36 @@
         <section id="attPhotos" class="section">
             <div class="card">
                 <div
-                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
-                    <h3>📸 Attendance Photos</h3>
-                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-                        <label style="margin: 0;">Filter:</label>
-                        <input type="month" id="att-photo-month-filter" onchange="loadAttendancePhotos()"
-                            style="padding: 0.4rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.9rem;">
-                        <select id="att-photo-emp-filter" onchange="_renderAttPhotoCards()"
-                            style="padding: 0.4rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.9rem; max-width: 150px;">
-                            <option value="">All Employees</option>
-                        </select>
-                        <button class="btn btn-primary" onclick="loadAttendancePhotos()">Refresh</button>
+                    style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem;">
+                    <div>
+                        <h3
+                            style="margin-top: 0; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                            📸 Attendance Photos</h3>
+                        <p style="color: var(--gray); font-size: 0.9rem; margin: 0;">View and manage all attendance
+                            check-in/out photos.</p>
+                    </div>
+
+                    <div class="filter-group" style="flex-wrap: wrap; display: flex; align-items: flex-end; gap: 1rem;">
+                        <div class="filter-item">
+                            <label for="att-photo-month-filter" class="filter-label"
+                                style="font-size: 0.85rem; font-weight: 600; color: #4b5563;">Filter by Month:</label>
+                            <input type="month" id="att-photo-month-filter" onchange="loadAttendancePhotos()"
+                                class="filter-input"
+                                style="padding: 0.5rem; border-radius: 6px; border: 1px solid #d1d5db;">
+                        </div>
+                        <div class="filter-item">
+                            <label for="att-photo-emp-filter" class="filter-label"
+                                style="font-size: 0.85rem; font-weight: 600; color: #4b5563;">Employee:</label>
+                            <select id="att-photo-emp-filter" onchange="_renderAttPhotoCards()" class="filter-input"
+                                style="padding: 0.5rem; border-radius: 6px; border: 1px solid #d1d5db;">
+                                <option value="">All Employees</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="loadAttendancePhotos()"
+                            style="padding: 0.5rem 1rem;">Refresh</button>
                     </div>
                 </div>
-                <p style="color: var(--gray); margin-bottom: 1.5rem;">View and manage all attendance check-in/out photos
-                    organized by employee.</p>
+
                 <p id="att-photo-count" style="color: var(--gray); font-size: 0.9rem; margin-bottom: 1rem;"></p>
 
                 <!-- Employee Cards rendered here -->
@@ -924,6 +946,8 @@
             style="width:100%; text-align:center; padding:0.75rem 1rem; color:white; font-size:0.95rem; font-weight:600; flex-shrink:0; background:rgba(0,0,0,0.4);">
         </div>
     </div>
+
+    <!-- TRUCK DATA LOADER OVERLAY -->
 
 
     <script src="js/app.js"></script>

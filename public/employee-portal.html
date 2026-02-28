@@ -761,6 +761,7 @@
         }
 
         body.dark-mode .modal-style-card,
+        body.dark-mode .attendance-action-card,
         body.dark-mode .card {
             background: #1e293b;
             border: 1px solid #334155;
@@ -964,6 +965,7 @@
         body,
         .card,
         .modal-style-card,
+        .attendance-action-card,
         .emp-details-header,
         input,
         select,
@@ -979,10 +981,21 @@
 
 <body>
     <!-- Header -->
-    <header class="header">
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <img src="assets/logo-horizontal.png" alt="Siddhi Electricals" style="height: 40px; width: auto;">
-            <h1 style="margin: 0;">Siddhi Electricals</h1>
+    <header class="header"
+        style="height: auto; min-height: 80px; align-items: center; display: flex; justify-content: space-between;">
+        <div class="brand" style="display: flex; align-items: center; gap: 12px;">
+            <!-- Crop container for the lightbulb icon from the flat logo -->
+            <div
+                style="width: 45px; height: 55px; overflow: hidden; display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0; border-radius: 8px; background: white; padding-left: 5px;">
+                <img src="assets/logo-horizontal.png" alt="Icon" style="height: 55px; width: auto; max-width: none;">
+            </div>
+            <!-- Stacked brand text - using white for the portal header since it's a dark gradient -->
+            <div style="display: flex; flex-direction: column; line-height: 1.15;">
+                <span class="brand-text-top"
+                    style="color: white; font-size: 1.4rem; font-weight: 800; letter-spacing: 0.5px; margin: 0;">Siddhi</span>
+                <span class="brand-text-bottom"
+                    style="color: white; font-size: 1.4rem; font-weight: 800; letter-spacing: 0.5px; margin: 0;">Electricals</span>
+            </div>
         </div>
         <div class="header-actions">
             <button class="header-btn" onclick="logout()">🚪 Logout</button>
@@ -2578,6 +2591,8 @@
 
         initDarkMode();
     </script>
+    <!-- TRUCK DATA LOADER OVERLAY -->
+
 </body>
 
 </html>
