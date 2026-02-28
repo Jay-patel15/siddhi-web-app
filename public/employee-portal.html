@@ -1432,11 +1432,7 @@
 
             try {
                 // 1. Start Camera Immediately
-                const cameraPromise = initCamera().then(() => {
-                    captureBtn.disabled = false;
-                    captureBtn.innerHTML = "📸 Capture & Save";
-                    statusMsg.innerHTML = "📸 Ready to Capture";
-                });
+                const cameraPromise = initCamera();
 
                 // 2. Fetch Location in Background
                 const locationPromise = getLocation().then(loc => {
@@ -1447,11 +1443,15 @@
                     console.warn("Location error:", err);
                     securityAccuracy.innerHTML = "unavailable / denied";
                     securityAccuracy.style.color = 'var(--danger)';
-                    // We don't throw here to allow capture without location if camera works
+                    throw new Error("Location is required to check in. Please enable GPS.");
                 });
 
-                // Wait for camera to be ready (critical path)
-                await cameraPromise;
+                // Wait for BOTH camera and location to be ready
+                await Promise.all([cameraPromise, locationPromise]);
+
+                captureBtn.disabled = false;
+                captureBtn.innerHTML = "📸 Capture & Save";
+                statusMsg.innerHTML = "📸 Ready to Capture";
 
             } catch (err) {
                 stopCamera(); camSection.style.display = 'none';
@@ -1463,6 +1463,14 @@
         async function submitAttendanceAction(type, location, base64Image) {
             const statusFull = document.getElementById('attendance-status');
             const captureBtn = document.getElementById('btn-capture');
+
+            if (!location) {
+                statusFull.innerHTML = "❌ Location required. Please enable GPS and try again.";
+                statusFull.className = "status-msg error";
+                statusFull.style.display = 'block';
+                return; // Stop submission
+            }
+
             statusFull.innerHTML = "⏳ Saving attendance...";
             statusFull.className = "status-msg info";
             captureBtn.disabled = true;
