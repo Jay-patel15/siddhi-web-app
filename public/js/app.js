@@ -1363,6 +1363,14 @@ async function loadAttendance() {
         document.getElementById('att-date').valueAsDate = new Date();
     }
 
+    // Set default times for faster entry
+    if (!document.getElementById('att-time-in').value) {
+        document.getElementById('att-time-in').value = '09:00';
+    }
+    if (!document.getElementById('att-time-out').value) {
+        document.getElementById('att-time-out').value = '18:00';
+    }
+
     // Load Table
     loadAttendanceTable();
 }
@@ -1487,13 +1495,33 @@ function editAttendance(id) {
     document.getElementById('attendance-form').scrollIntoView({ behavior: 'smooth' });
 }
 
-function resetAttendanceForm() {
-    document.getElementById('attendance-form').reset();
-    document.getElementById('att-id').value = '';
-    document.getElementById('att-submit-btn').innerText = 'Submit Attendance';
-    document.getElementById('att-cancel-btn').style.display = 'none';
-    document.getElementById('att-result').innerHTML = '';
-    document.getElementById('att-date').valueAsDate = new Date();
+function resetAttendanceForm(fullReset = true) {
+    if (fullReset) {
+        document.getElementById('attendance-form').reset();
+        document.getElementById('att-id').value = '';
+        document.getElementById('att-submit-btn').innerText = 'Submit Attendance';
+        document.getElementById('att-cancel-btn').style.display = 'none';
+        document.getElementById('att-result').innerHTML = '';
+        document.getElementById('att-date').valueAsDate = new Date();
+        document.getElementById('att-time-in').value = '09:00';
+        document.getElementById('att-time-out').value = '18:00';
+    } else {
+        // Partial reset for fast entry of new records
+        document.getElementById('att-id').value = '';
+        document.getElementById('att-submit-btn').innerText = 'Submit Attendance';
+        document.getElementById('att-cancel-btn').style.display = 'none';
+
+        // Auto-select next employee
+        const empSelect = document.getElementById('att-employee');
+        if (empSelect.selectedIndex < empSelect.options.length - 1) {
+            empSelect.selectedIndex += 1;
+            calculatePreview();
+        } else {
+            // Reached the end, reset back to 'Select Employee'
+            empSelect.selectedIndex = 0;
+            document.getElementById('att-result').innerHTML = '';
+        }
+    }
 }
 
 async function deleteAttendance(id) {
@@ -1509,7 +1537,10 @@ function calculatePreview() {
     const empSelect = document.getElementById('att-employee');
     const slabMode = document.getElementById('att-slab-mode').checked;
 
-    if (!timeIn || !timeOut || !empSelect.value) return;
+    if (!timeIn || !timeOut || !empSelect.value) {
+        document.getElementById('att-result').innerHTML = '';
+        return;
+    }
 
     const start = new Date(`1970-01-01T${timeIn}Z`);
     const end = new Date(`1970-01-01T${timeOut}Z`);
@@ -1572,24 +1603,51 @@ document.getElementById('attendance-form').addEventListener('submit', async (e) 
         workedHours: workedHours
     };
 
-    if (id) {
-        await fetch(`${API_URL}/attendance/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        alert('Attendance Updated!');
-    } else {
-        await fetch(`${API_URL}/attendance`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        alert('Attendance Marked!');
+    const submitBtn = document.getElementById('att-submit-btn');
+    const originalText = submitBtn.innerText;
+    const originalBg = submitBtn.style.background;
+
+    submitBtn.innerText = 'Saving...';
+    submitBtn.disabled = true;
+
+    try {
+        if (id) {
+            await fetch(`${API_URL}/attendance/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            submitBtn.innerText = 'Updated ✓';
+            submitBtn.style.background = '#10b981'; // green
+            setTimeout(() => {
+                resetAttendanceForm(true); // Full reset after edit
+            }, 800);
+        } else {
+            await fetch(`${API_URL}/attendance`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            submitBtn.innerText = 'Marked ✓';
+            submitBtn.style.background = '#10b981'; // green
+            setTimeout(() => {
+                resetAttendanceForm(false); // Partial reset for fast entry
+                submitBtn.innerText = originalText;
+                submitBtn.style.background = originalBg;
+                submitBtn.disabled = false;
+            }, 800);
+        }
+
+        loadAttendanceTable();
+        loadDashboard();
+
+    } catch (error) {
+        console.error("Error saving attendance:", error);
+        alert("Failed to save attendance.");
+        submitBtn.innerText = originalText;
+        submitBtn.style.background = originalBg;
+        submitBtn.disabled = false;
     }
-    resetAttendanceForm();
-    loadAttendanceTable();
-    loadDashboard();
 });
 
 // --- ADVANCES ---

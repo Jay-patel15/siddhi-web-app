@@ -1370,7 +1370,7 @@
                         if (err.code === 1) msg = "❌ Location permission denied.";
                         reject(new Error(msg));
                     },
-                    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+                    { enableHighAccuracy: false, timeout: 5000, maximumAge: 10000 }
                 );
             });
         }
@@ -1412,21 +1412,47 @@
             const camSection = document.getElementById('camera-section');
             const hint = document.getElementById('capture-hint');
             const captureBtn = document.getElementById('btn-capture');
+            const securityStatus = document.getElementById('security-status');
+            const securityAccuracy = document.getElementById('security-accuracy');
 
-            statusMsg.innerHTML = "Initializing security check...";
+            statusMsg.innerHTML = "Initializing...";
             statusMsg.className = "status-msg info"; statusMsg.style.display = 'block';
             camSection.style.display = 'block'; hint.style.display = 'block';
-            captureBtn.style.display = 'none';
+            captureBtn.style.display = 'flex'; captureBtn.disabled = true;
+            captureBtn.innerHTML = "⏳ Starting Camera...";
             document.getElementById('btn-check-in').disabled = true;
             document.getElementById('btn-check-out').disabled = true;
 
+            securityStatus.style.display = 'block';
+            securityAccuracy.innerHTML = "detecting location...";
+            securityAccuracy.style.color = 'var(--warning)';
+
+            // Prepare state tracking
+            pendingAttendance = { type, location: null };
+
             try {
-                let location = await getLocation();
-                pendingAttendance = { type, location };
-                captureBtn.style.display = 'flex'; captureBtn.disabled = true;
-                captureBtn.innerHTML = "⏳ Starting Camera...";
-                await initCamera();
-                captureBtn.disabled = false; captureBtn.innerHTML = "📸 Capture & Save";
+                // 1. Start Camera Immediately
+                const cameraPromise = initCamera().then(() => {
+                    captureBtn.disabled = false;
+                    captureBtn.innerHTML = "📸 Capture & Save";
+                    statusMsg.innerHTML = "📸 Ready to Capture";
+                });
+
+                // 2. Fetch Location in Background
+                const locationPromise = getLocation().then(loc => {
+                    pendingAttendance.location = loc;
+                    securityAccuracy.innerHTML = `found (${Math.round(loc.accuracy)}m)`;
+                    securityAccuracy.style.color = '#10b981'; // Green
+                }).catch(err => {
+                    console.warn("Location error:", err);
+                    securityAccuracy.innerHTML = "unavailable / denied";
+                    securityAccuracy.style.color = 'var(--danger)';
+                    // We don't throw here to allow capture without location if camera works
+                });
+
+                // Wait for camera to be ready (critical path)
+                await cameraPromise;
+
             } catch (err) {
                 stopCamera(); camSection.style.display = 'none';
                 statusMsg.innerHTML = err.message; statusMsg.className = "status-msg error";
