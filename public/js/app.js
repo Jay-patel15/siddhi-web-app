@@ -627,6 +627,8 @@ async function loadDashboard() {
         let empEarned = 0;
         empAtt.forEach(att => {
             const wh = parseFloat(att.workedHours);
+            if (isNaN(wh)) return;
+
             const sal = parseFloat(emp.salary);
             const hourly = sal / globalSettings.standardHours;
             if (att.slabMode && wh > globalSettings.standardHours) {

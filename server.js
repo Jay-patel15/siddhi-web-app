@@ -603,6 +603,8 @@ app.get('/api/payroll', async (req, res) => {
             empAtt.forEach(att => {
                 let dailySalary = 0;
                 const workedHours = parseFloat(att.workedHours);
+                if (isNaN(workedHours)) return;
+
                 const salary = parseFloat(emp.salary);
                 const normalRate = salary / stdHours;
 
@@ -636,6 +638,8 @@ app.get('/api/payroll', async (req, res) => {
             pastAtt.forEach(att => {
                 let dailySalary = 0;
                 const workedHours = parseFloat(att.workedHours);
+                if (isNaN(workedHours)) return;
+
                 const salary = parseFloat(emp.salary); // Using current salary for simplicity
                 const normalRate = salary / stdHours;
 

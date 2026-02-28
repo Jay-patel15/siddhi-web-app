@@ -160,8 +160,14 @@
                 const data = await res.json();
 
                 if (data.success) {
+                    if (data.role !== 'admin') {
+                        showError('You are an employee. Please use the Employee login.');
+                        btn.innerHTML = 'Login as Admin';
+                        btn.disabled = false;
+                        return;
+                    }
                     localStorage.setItem('payroll_session', JSON.stringify({
-                        role: 'admin',
+                        role: data.role,
                         username: username,
                         timestamp: Date.now()
                     }));
@@ -189,8 +195,14 @@
                 const data = await res.json();
 
                 if (data.success) {
+                    if (data.role !== 'employee') {
+                        showError('You are an Admin. Please use the Admin login.');
+                        btn.innerHTML = 'Login as Employee';
+                        btn.disabled = false;
+                        return;
+                    }
                     localStorage.setItem('payroll_session', JSON.stringify({
-                        role: 'employee',
+                        role: data.role,
                         employeeId: data.id,
                         employeeName: data.name,
                         timestamp: Date.now()
