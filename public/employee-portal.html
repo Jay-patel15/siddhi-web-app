@@ -1859,7 +1859,11 @@
                 const normalRate = salary / stdHours;
                 let dayPay = 0;
 
-                if (att.slabMode && wh > stdHours) {
+                if (att.sundayMode) {
+                    dayPay = salary;
+                    totalNormalHours += stdHours;
+                    totalBasePay += dayPay;
+                } else if (att.slabMode && wh > stdHours) {
                     const normalPart = normalRate * stdHours;
                     const slabRate = salary / slabHours; // Assuming slabHours is defined or global
                     const extraPart = slabRate * (wh - stdHours);
@@ -1900,7 +1904,9 @@
                 const salary = parseFloat(currentEmployee.salary);
                 const normalRate = salary / stdHours;
                 let dayPay = 0;
-                if (att.slabMode && wh > stdHours) {
+                if (att.sundayMode) {
+                    dayPay = salary;
+                } else if (att.slabMode && wh > stdHours) {
                     const slabRate = salary / slabHours;
                     dayPay = (normalRate * stdHours) + (slabRate * (wh - stdHours));
                 } else {
@@ -1988,7 +1994,9 @@
             const normalRate = salary / stdHours;
             const hours = parseFloat(att.totalHours || att.workedHours || 0);
 
-            if (att.slabMode && hours > stdHours) {
+            if (att.sundayMode) {
+                return salary;
+            } else if (att.slabMode && hours > stdHours) {
                 const normalPart = normalRate * stdHours;
                 const slabRate = salary / slabHours;
                 const extraPart = slabRate * (hours - stdHours);
@@ -1996,6 +2004,13 @@
             } else {
                 return hours * normalRate;
             }
+        }
+
+        function formatDateWithDay(dateString) {
+            if (!dateString) return '';
+            const dateObj = new Date(dateString);
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            return `${dateString} (${dayNames[dateObj.getDay()]})`;
         }
 
         function updateAttendanceTable(data) {
@@ -2048,7 +2063,7 @@
 
                 return `
                     <tr>
-                        <td data-label="Date">${att.date}</td>
+                        <td data-label="Date">${formatDateWithDay(att.date)}</td>
                         <td data-label="Time In"><span style="font-weight:600; color:var(--dark)">${formatTimeTo12h(att.timeIn)}</span></td>
                         <td data-label="In Links">${inLinks}</td>
                         <td data-label="Time Out"><span style="font-weight:600; color:var(--dark)">${att.timeOut ? formatTimeTo12h(att.timeOut) : '-'}</span></td>
@@ -2073,7 +2088,7 @@
             empty.style.display = 'none';
             tbody.innerHTML = data.map(adv => `
                     <tr>
-                        <td data-label="Date">${adv.date}</td>
+                        <td data-label="Date">${formatDateWithDay(adv.date)}</td>
                         <td data-label="Amount" style="color: var(--danger); font-weight: 600;">₹${adv.amount}</td>
                         <td data-label="Notes">${adv.notes || '-'}</td>
                         <td data-label="Other">${adv.screenshot ? `<a href="#" onclick="showPreview('${adv.screenshot}', 'Advance Payment', '${adv.date}', '${adv.amount}'); return false;" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>` : '-'}</td>
@@ -2094,7 +2109,7 @@
             empty.style.display = 'none';
             tbody.innerHTML = data.map(pay => `
                 <tr>
-                    <td data-label="Date">${pay.date}</td>
+                    <td data-label="Date">${formatDateWithDay(pay.date)}</td>
                     <td data-label="Mode">${pay.mode || 'Cash'}</td>
                     <td data-label="Amount" style="color: var(--secondary); font-weight: 600;">₹${pay.amount}</td>
                     <td data-label="Notes">${pay.notes || '-'}</td>
@@ -2304,7 +2319,9 @@
                 pastAtt.forEach(at => {
                     const wh = parseFloat(at.workedHours);
                     let dayPay = 0;
-                    if (at.slabMode && wh > stdHours) {
+                    if (at.sundayMode) {
+                        dayPay = salary;
+                    } else if (at.slabMode && wh > stdHours) {
                         dayPay = (normalHourlyRate * stdHours) + (slabHourlyRate * (wh - stdHours));
                     } else {
                         dayPay = normalHourlyRate * wh;

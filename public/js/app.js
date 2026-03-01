@@ -1722,11 +1722,12 @@ async function loadAttendance() {
 }
 
 async function loadAttendanceTable() {
-    let monthInput = document.getElementById('att-filter-month').value;
-    if (!monthInput) {
+    let dateInput = document.getElementById('att-filter-date').value;
+
+    if (!dateInput) {
         const now = new Date();
-        monthInput = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        document.getElementById('att-filter-month').value = monthInput;
+        dateInput = now.toISOString().split('T')[0];
+        document.getElementById('att-filter-date').value = dateInput;
     }
 
     const [attRes, empRes] = await Promise.all([
@@ -1743,7 +1744,7 @@ async function loadAttendanceTable() {
     const empFilter = document.getElementById('att-filter-employee') ? document.getElementById('att-filter-employee').value : '';
 
     const filtered = attendanceData
-        .filter(a => a.date.startsWith(monthInput))
+        .filter(a => a.date === dateInput)
         .filter(a => !empFilter || a.employeeId == empFilter)
         .sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -1757,6 +1758,10 @@ async function loadAttendanceTable() {
         const empName = emp ? emp.name : att.employeeName + ' (Deleted)';
         const defaultSalary = emp ? emp.salary : 0;
 
+        const dateObj = new Date(att.date);
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const formattedDate = `${att.date} (${dayNames[dateObj.getDay()]})`;
+
         const workedHours = att.workedHours ? parseFloat(att.workedHours) : null;
         const salary = parseFloat(defaultSalary);
 
@@ -1765,7 +1770,9 @@ async function loadAttendanceTable() {
         let computedPay = 0;
 
         if (workedHours !== null) {
-            if (att.slabMode && workedHours > globalSettings.standardHours) {
+            if (att.sundayMode) {
+                computedPay = salary;
+            } else if (att.slabMode && workedHours > globalSettings.standardHours) {
                 const extraHours = workedHours - globalSettings.standardHours;
                 const slabRate = salary / globalSettings.slabHours;
                 computedPay = (normalRate * globalSettings.standardHours) + (slabRate * extraHours);
@@ -1804,7 +1811,7 @@ async function loadAttendanceTable() {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td data-label="Date">${att.date}</td>
+            <td data-label="Date">${formattedDate}</td>
             <td data-label="Employee" style="font-weight:500;">${empName}</td>
             <td data-label="Time In"><span style="font-weight:600; color:var(--dark)">${formatTimeTo12h(att.timeIn)}</span></td>
             <td data-label="In Links">${inLinks}</td>
@@ -1812,10 +1819,11 @@ async function loadAttendanceTable() {
             <td data-label="Out Links">${outLinks}</td>
             <td data-label="Hrs">${workedHours !== null ? workedHours.toFixed(2) + 'h' : '-'}
                 ${att.slabMode && workedHours > globalSettings.standardHours ? '<span style="color:var(--warning); font-size: 0.8em"> (OT)</span>' : ''}
+                ${att.sundayMode ? '<span style="color:var(--success); font-size: 0.8em"> (S)</span>' : ''}
             </td>
             <td data-label="Mode">
-                <span style="padding: 2px 6px; border-radius: 4px; font-size: 0.75em; background: ${att.slabMode ? '#dcfce7; color: #166534' : '#e0e7ff; color: #3730a3'}">
-                    ${att.slabMode ? 'Slab' : 'Norm'}
+                <span style="padding: 2px 6px; border-radius: 4px; font-size: 0.75em; background: ${att.sundayMode ? '#fef08a; color: #854d0e' : (att.slabMode ? '#dcfce7; color: #166534' : '#e0e7ff; color: #3730a3')}">
+                    ${att.sundayMode ? 'Sunday' : (att.slabMode ? 'Slab' : 'Norm')}
                 </span>
             </td>
             <td data-label="Salary">${workedHours !== null ? '₹' + Math.round(computedPay) : '-'}</td>
@@ -1838,7 +1846,8 @@ function editAttendance(id) {
     document.getElementById('att-id').value = att.id;
     document.getElementById('att-date').value = att.date;
     document.getElementById('att-employee').value = att.employeeId;
-    document.getElementById('att-slab-mode').checked = att.slabMode;
+    document.getElementById('att-slab-mode').checked = att.slabMode || false;
+    document.getElementById('att-sunday-mode').checked = att.sundayMode || false;
     document.getElementById('att-time-in').value = att.timeIn;
     document.getElementById('att-time-out').value = att.timeOut;
     document.getElementById('att-fare').value = att.fare;
@@ -1852,16 +1861,25 @@ function resetAttendanceForm(fullReset = true) {
     if (fullReset) {
         document.getElementById('attendance-form').reset();
         document.getElementById('att-id').value = '';
-        document.getElementById('att-submit-btn').innerText = 'Submit Attendance';
+        const submitBtn = document.getElementById('att-submit-btn');
+        submitBtn.innerText = 'Submit Attendance';
+        submitBtn.disabled = false;
+        submitBtn.style.background = '';
         document.getElementById('att-cancel-btn').style.display = 'none';
         document.getElementById('att-result').innerHTML = '';
         document.getElementById('att-date').valueAsDate = new Date();
         document.getElementById('att-time-in').value = '09:00';
         document.getElementById('att-time-out').value = '18:00';
+        document.getElementById('att-slab-mode').checked = false;
+        document.getElementById('att-sunday-mode').checked = false;
     } else {
         // Partial reset for fast entry of new records
         document.getElementById('att-id').value = '';
-        document.getElementById('att-submit-btn').innerText = 'Submit Attendance';
+        document.getElementById('att-employee').value = '';
+        const submitBtn = document.getElementById('att-submit-btn');
+        submitBtn.innerText = 'Submit Attendance';
+        submitBtn.disabled = false;
+        submitBtn.style.background = '';
         document.getElementById('att-cancel-btn').style.display = 'none';
 
         // Auto-select next employee
@@ -1889,6 +1907,7 @@ function calculatePreview() {
     const timeOut = document.getElementById('att-time-out').value;
     const empSelect = document.getElementById('att-employee');
     const slabMode = document.getElementById('att-slab-mode').checked;
+    const sundayMode = document.getElementById('att-sunday-mode').checked;
 
     if (!timeIn || !timeOut || !empSelect.value) {
         document.getElementById('att-result').innerHTML = '';
@@ -1910,7 +1929,9 @@ function calculatePreview() {
     const normalRate = salary / globalSettings.standardHours;
     let computedPay = 0;
 
-    if (slabMode && workedHours > globalSettings.standardHours) {
+    if (sundayMode) {
+        computedPay = salary;
+    } else if (slabMode && workedHours > globalSettings.standardHours) {
         const extraHours = workedHours - globalSettings.standardHours;
         const slabRate = salary / globalSettings.slabHours;
         computedPay = (normalRate * globalSettings.standardHours) + (slabRate * extraHours);
@@ -1925,7 +1946,7 @@ function calculatePreview() {
     return workedHours.toFixed(2);
 }
 
-['att-time-in', 'att-time-out', 'att-slab-mode', 'att-employee'].forEach(id => {
+['att-time-in', 'att-time-out', 'att-slab-mode', 'att-sunday-mode', 'att-employee'].forEach(id => {
     document.getElementById(id).addEventListener('change', calculatePreview);
 });
 
@@ -1950,6 +1971,7 @@ document.getElementById('attendance-form').addEventListener('submit', async (e) 
         employeeId: employeeId,
         employeeName: document.getElementById('att-employee').selectedOptions[0].text,
         slabMode: document.getElementById('att-slab-mode').checked,
+        sundayMode: document.getElementById('att-sunday-mode').checked,
         timeIn: document.getElementById('att-time-in').value,
         timeOut: document.getElementById('att-time-out').value,
         fare: document.getElementById('att-fare').value,

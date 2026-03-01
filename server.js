@@ -156,6 +156,7 @@ app.post('/api/attendance', async (req, res) => {
             timeOut: req.body.timeOut,
             workedHours: req.body.workedHours,
             slabMode: req.body.slabMode || false,
+            sundayMode: req.body.sundayMode || false,
             fare: req.body.fare || 0,
             checkInImage: req.body.checkInImage || null,
             checkInLoc: req.body.checkInLoc || null,
@@ -608,7 +609,9 @@ app.get('/api/payroll', async (req, res) => {
                 const salary = parseFloat(emp.salary);
                 const normalRate = salary / stdHours;
 
-                if (att.slabMode) {
+                if (att.sundayMode) {
+                    dailySalary = salary;
+                } else if (att.slabMode) {
                     if (workedHours > stdHours) {
                         const extraHours = workedHours - stdHours;
                         const slabRate = salary / slabBase;
@@ -643,7 +646,9 @@ app.get('/api/payroll', async (req, res) => {
                 const salary = parseFloat(emp.salary); // Using current salary for simplicity
                 const normalRate = salary / stdHours;
 
-                if (att.slabMode) {
+                if (att.sundayMode) {
+                    dailySalary = salary;
+                } else if (att.slabMode) {
                     if (workedHours > stdHours) {
                         const extraHours = workedHours - stdHours;
                         const slabRate = salary / slabBase;
