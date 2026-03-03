@@ -1849,6 +1849,7 @@
             let totalOTHours = 0;
             let totalBasePay = 0;
             let totalOTPay = 0;
+            let totalFare = 0;
 
             const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
             const slabHours = (allData.settings && allData.settings.slabHours) ? parseFloat(allData.settings.slabHours) : 6;
@@ -1878,7 +1879,9 @@
                     totalNormalHours += wh;
                     totalBasePay += dayPay;
                 }
-                totalEarned += dayPay + (parseFloat(att.fare) || 0);
+                const fareAmt = parseFloat(att.fare) || 0;
+                totalFare += fareAmt;
+                totalEarned += dayPay + fareAmt;
             });
 
             const totalAdvances = myAdvances
@@ -1950,10 +1953,24 @@
                 if (title) title.innerText = "Net Payable";
                 if (title) title.title = `Base: ₹${Math.round(totalBasePay)} + OT: ₹${Math.round(totalOTPay)} = Earned: ₹${Math.round(totalEarned)}`;
 
-                // Add visible breakdown to value
+                // Build structured breakdown box: Basic Salary + OT + Travel
+                const breakdownStr = `
+                    <div style="font-size:0.65em; font-weight:normal; margin-top:0.4rem; border-top:1px solid rgba(0,0,0,0.1); padding-top:0.3rem; line-height:1.7; color: var(--gray);">
+                        <div style="display:flex; justify-content:space-between;"><span>Basic Salary</span><span>₹${Math.round(totalBasePay)}</span></div>
+                        ${totalOTPay > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Overtime</span><span>₹${Math.round(totalOTPay)}</span></div>` : ''}
+                        ${totalFare > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Travel / Fare</span><span>₹${Math.round(totalFare)}</span></div>` : ''}
+                    </div>`;
+
+                const dueAmount = Math.round(netPayable);
                 const val = document.getElementById('stat-net');
                 if (val) {
-                    val.innerHTML = `₹${Math.round(netPayable)} <span style="font-size: 0.6em; display: block; color: var(--gray); margin-top: 0.2rem; font-weight: normal;">(Earned: ₹${Math.round(totalBasePay)}+₹${Math.round(totalOTPay)})</span>`;
+                    if (totalPayments > 0 && dueAmount <= 0) {
+                        val.innerHTML = `<span style="font-weight:bold;">SETTLED</span> ${breakdownStr}`;
+                    } else if (totalPayments > 0) {
+                        val.innerHTML = `₹${dueAmount} ${breakdownStr}<div style="font-size:0.6em; margin-top:0.3rem; border-top:1px solid rgba(0,0,0,0.1); padding-top:0.3rem; font-weight:normal;">⚠️ Due: ₹${dueAmount} &nbsp;|&nbsp; Paid: ₹${totalPayments}</div>`;
+                    } else {
+                        val.innerHTML = `₹${dueAmount} ${breakdownStr}`;
+                    }
                 }
             }
 
@@ -1969,8 +1986,6 @@
                 prevEl.innerHTML = `<span>${previousBalance > 0 ? '+' : ''}₹${previousBalance}</span>`;
                 prevCard.className = `stat-card ${isNeg ? 'prev-bal-neg' : 'prev-bal-pos'}`;
             }
-
-            document.getElementById('stat-net').innerText = netPayable <= 0 ? 'SETTLED' : `₹${Math.round(netPayable)}`;
 
             // New Stats
             let totalHours = 0;

@@ -1350,6 +1350,7 @@ async function updateModalData() {
     let totalOTHours = 0;
     let totalBasePay = 0;
     let totalOTPay = 0;
+    let totalFare = 0;
 
     const attBody = document.getElementById('modal-att-body');
     attBody.innerHTML = '';
@@ -1378,7 +1379,9 @@ async function updateModalData() {
             totalBasePay += dayPay;
         }
 
-        earned += dayPay + (parseFloat(a.fare) || 0);
+        const fareAmt = parseFloat(a.fare) || 0;
+        totalFare += fareAmt;
+        earned += dayPay + fareAmt;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -1445,16 +1448,22 @@ async function updateModalData() {
         }
     }
 
-    // Update Net Payable Card
-    const payableEl = document.getElementById('modal-payable');
-    const payableCard = payableEl.parentElement;
-    const breakdownHtml = `<span style="font-size: 0.6em; display: block; color: inherit; opacity: 0.7; margin-top: 0.2rem; font-weight: normal;">(Earned: ₹${Math.round(totalBasePay)}+₹${Math.round(totalOTPay)})</span>`;
+    // Build structured breakdown box: Basic Salary + OT + Travel
+    const breakdownHtml = `
+        <div style="font-size:0.65em; font-weight:normal; margin-top:0.4rem; border-top:1px solid rgba(255,255,255,0.3); padding-top:0.3rem; line-height:1.7;">
+            <div style="display:flex; justify-content:space-between;"><span>Basic Salary</span><span>₹${Math.round(totalBasePay)}</span></div>
+            ${totalOTPay > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Overtime</span><span>₹${Math.round(totalOTPay)}</span></div>` : ''}
+            ${totalFare > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Travel / Fare</span><span>₹${Math.round(totalFare)}</span></div>` : ''}
+        </div>`;
 
-    if (balance <= 0 && totalPaid > 0) {
+    const dueAmount = Math.round(net - totalPaid);
+
+    if (dueAmount <= 0 && totalPaid > 0) {
         payableEl.innerHTML = `<span style="font-weight: bold;">SETTLED</span> ${breakdownHtml}`;
         payableCard.className = 'stat-card card-positive';
     } else if (totalPaid > 0) {
-        payableEl.innerHTML = `₹${balance} ${breakdownHtml} <div style="font-size:0.7em; opacity: 0.8; font-weight:normal">Due (Pd: ₹${totalPaid})</div>`;
+        payableEl.innerHTML = `₹${dueAmount} ${breakdownHtml}
+            <div style="font-size:0.7em; font-weight:normal; margin-top:0.3rem; border-top:1px solid rgba(255,255,255,0.3); padding-top:0.3rem;">⚠️ Due: ₹${dueAmount} &nbsp;|&nbsp; Paid: ₹${totalPaid}</div>`;
         payableCard.className = 'stat-card card-warning';
     } else {
         payableEl.innerHTML = `₹${Math.round(net)} ${breakdownHtml}`;
@@ -2212,8 +2221,12 @@ async function loadPayroll() {
         document.getElementById('payroll-month').value = monthInput;
     }
 
-    const res = await fetch(`${API_URL}/payroll?month=${monthInput}`);
+    const [res, payRes] = await Promise.all([
+        fetch(`${API_URL}/payroll?month=${monthInput}`),
+        fetch(`${API_URL}/payments`)
+    ]);
     const payroll = await res.json();
+    paymentsData = await payRes.json();
 
     const grid = document.getElementById('payroll-grid');
     grid.innerHTML = '';
@@ -2232,23 +2245,29 @@ async function loadPayroll() {
 
         const statusColor = status === 'Settled' ? '#10b981' : (status === 'Partial' ? '#f59e0b' : '#ef4444');
 
+        // Build per-payment edit/delete rows
         let proofHtml = '';
-        if (p.paymentProofs && p.paymentProofs.length > 0) {
-            proofHtml = `<div style="margin-top: 0.5rem; font-size: 0.85rem;">
-                <span style="color: var(--gray);">Proofs: </span>
-                ${p.paymentProofs.map((url, i) => {
-                // Check extension
-                const isPdf = url.toLowerCase().endsWith('.pdf');
-                // Escape arguments for the onclick handler
-                const safeUrl = url.replace(/'/g, "\\'");
-                const safeDate = (p.lastPaymentDate || '').replace(/'/g, "\\'");
-                const safeAmount = (p.paidTotal || 0).toString();
-
-                if (isPdf) {
-                    return `<a href="${url}" target="_blank" style="color: var(--secondary); text-decoration: underline; margin-right: 5px; cursor: pointer;">View ${i + 1}</a>`;
-                } else {
-                    return `<a href="#" onclick="showPreview('${safeUrl}', 'Salary Payment', '${safeDate}', '${safeAmount}'); return false;" style="color: var(--secondary); text-decoration: underline; margin-right: 5px; cursor: pointer;">View ${i + 1}</a>`;
-                }
+        const empPayments = paymentsData.filter(pay => pay.employeeId === p.employee.id && pay.salaryMonth === monthInput);
+        if (empPayments.length > 0) {
+            proofHtml = `<div style="margin-top: 0.75rem; border-top: 1px dashed #e2e8f0; padding-top: 0.5rem;">
+                <div style="font-size: 0.8rem; color: var(--gray); margin-bottom: 0.4rem; font-weight: 600;">PAYMENT RECORDS</div>
+                ${empPayments.map((pay, i) => {
+                const isPdf = pay.screenshot && pay.screenshot.toLowerCase().endsWith('.pdf');
+                const safeUrl = (pay.screenshot || '').replace(/'/g, "\\'");
+                const safeDate = (pay.date || '').replace(/'/g, "\\'");
+                const proofLink = pay.screenshot
+                    ? (isPdf
+                        ? `<a href="${pay.screenshot}" target="_blank" style="color: var(--secondary); font-size: 0.78rem;">📄 Proof</a>`
+                        : `<a href="#" onclick="showPreview('${safeUrl}', 'Salary Payment', '${safeDate}', '${pay.amount}'); return false;" style="color: var(--secondary); font-size: 0.78rem;">🖼 Proof</a>`)
+                    : '';
+                return `<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0; font-size: 0.85rem; border-bottom: 1px solid #f1f5f9;">
+                        <span style="color: var(--dark);">₹${pay.amount} <span style="color: var(--gray); font-size: 0.75rem;">(${pay.date})</span></span>
+                        <div style="display: flex; gap: 0.35rem; align-items: center;">
+                            ${proofLink}
+                            <button class="btn" style="background: #f59e0b; color: white; padding: 2px 7px; font-size: 0.75rem; border-radius: 4px;" onclick="openEditPaymentModal('${pay.id}')">✏️</button>
+                            <button class="btn" style="background: var(--danger); color: white; padding: 2px 7px; font-size: 0.75rem; border-radius: 4px;" onclick="deletePaymentRecord('${pay.id}')">🗑️</button>
+                        </div>
+                    </div>`;
             }).join('')}
             </div>`;
         }
@@ -2302,6 +2321,10 @@ async function loadPayroll() {
                 ${proofHtml}
             </div>
 
+            ${remainingDue > 0 ? `
+            <div style="background: #fef9c3; border: 1px solid #fcd34d; border-radius: 6px; padding: 0.4rem 0.6rem; margin-bottom: 0.75rem; font-size: 0.8rem; color: #92400e;">
+                ⏩ ₹${remainingDue} will carry forward to next month if unpaid
+            </div>` : ''}
             <div style="display: flex; gap: 0.5rem;">
                 ${remainingDue > 0 ?
                 `<button class="btn btn-primary" style="flex: 1;" onclick="openPaymentModal('${p.employee.id}', '${remainingDue}')">Mark Paid</button>` :
@@ -2356,6 +2379,73 @@ document.getElementById('payment-form').addEventListener('submit', async (e) => 
         loadPayroll(); // Refresh cards
     } catch (e) {
         alert('Error saving payment');
+    }
+});
+
+// --- EDIT PAYMENT ---
+async function openEditPaymentModal(paymentId) {
+    const pay = paymentsData.find(p => p.id === paymentId);
+    if (!pay) {
+        // try fetching from API in case local cache is stale
+        try {
+            const res = await fetch(`${API_URL}/payments`);
+            paymentsData = await res.json();
+        } catch (e) { }
+        const payFresh = paymentsData.find(p => p.id === paymentId);
+        if (!payFresh) { alert('Payment not found.'); return; }
+    }
+    const payment = paymentsData.find(p => p.id === paymentId);
+    document.getElementById('edit-pay-id').value = payment.id;
+    document.getElementById('edit-pay-amount').value = payment.amount;
+    document.getElementById('edit-pay-date').value = payment.date;
+    document.getElementById('edit-pay-mode').value = payment.mode || 'Cash';
+    document.getElementById('edit-pay-notes').value = payment.notes || '';
+    document.getElementById('edit-pay-screenshot').value = '';
+    document.getElementById('edit-payment-modal').style.display = 'flex';
+}
+
+function closeEditPaymentModal() {
+    document.getElementById('edit-payment-modal').style.display = 'none';
+    document.getElementById('edit-payment-form').reset();
+}
+
+async function deletePaymentRecord(paymentId) {
+    if (!confirm('Delete this payment? This will update the remaining balance.')) return;
+    try {
+        const res = await fetch(`${API_URL}/payments/${paymentId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+        loadPayroll();
+    } catch (e) {
+        alert('Error deleting payment: ' + e.message);
+    }
+}
+
+document.getElementById('edit-payment-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('edit-pay-id').value;
+    const formData = new FormData();
+    formData.append('amount', document.getElementById('edit-pay-amount').value);
+    formData.append('date', document.getElementById('edit-pay-date').value);
+    formData.append('mode', document.getElementById('edit-pay-mode').value);
+    formData.append('notes', document.getElementById('edit-pay-notes').value);
+
+    const fileInput = document.getElementById('edit-pay-screenshot');
+    if (fileInput.files[0]) {
+        const compressed = await compressImage(fileInput.files[0]);
+        formData.append('screenshot', compressed);
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/payments/${id}`, {
+            method: 'PUT',
+            body: formData
+        });
+        if (!res.ok) throw new Error('Update failed');
+        alert('Payment updated!');
+        closeEditPaymentModal();
+        loadPayroll();
+    } catch (e) {
+        alert('Error updating payment: ' + e.message);
     }
 });
 

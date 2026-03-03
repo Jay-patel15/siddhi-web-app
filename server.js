@@ -488,6 +488,47 @@ app.post('/api/payments', upload.single('screenshot'), async (req, res) => {
     }
 });
 
+app.put('/api/payments/:id', upload.single('screenshot'), async (req, res) => {
+    try {
+        const existing = await dbService.getPaymentById(req.params.id);
+        if (!existing) return res.status(404).json({ error: 'Payment not found' });
+
+        let screenshotUrl = existing.screenshot;
+        if (req.file) {
+            if (existing.screenshot) await dbService.deleteFile(existing.screenshot);
+            const ext = path.extname(req.file.originalname);
+            const name = req.file.originalname.replace(ext, '').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
+            const fileName = `${Date.now()}-${name}${ext}`;
+            screenshotUrl = await dbService.uploadFile(req.file.buffer, fileName, req.file.mimetype);
+        }
+
+        const updatedPayment = {
+            amount: parseFloat(req.body.amount),
+            date: req.body.date,
+            mode: req.body.mode,
+            notes: req.body.notes,
+            screenshot: screenshotUrl
+        };
+        const updated = await dbService.updatePayment(req.params.id, updatedPayment);
+        res.json(updated);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/payments/:id', async (req, res) => {
+    try {
+        const pay = await dbService.getPaymentById(req.params.id);
+        if (pay && pay.screenshot) {
+            await dbService.deleteFile(pay.screenshot);
+        }
+        await dbService.deletePayment(req.params.id);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // UPLOADS MGMT
 app.get('/api/uploads', async (req, res) => {
     try {

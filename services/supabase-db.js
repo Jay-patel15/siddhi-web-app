@@ -213,6 +213,22 @@ const createPayment = async (payment) => {
     return data;
 };
 
+const updatePayment = async (id, payment) => {
+    return retry(async () => {
+        const { data, error } = await supabase.from('payments').update(payment).eq('id', id).select().single();
+        if (error) throw new Error(error.message);
+        return data;
+    });
+};
+
+const deletePayment = async (id) => {
+    return retry(async () => {
+        const { error } = await supabase.from('payments').delete().eq('id', id);
+        if (error) throw new Error(error.message);
+        return { success: true };
+    });
+};
+
 // ==================== SETTINGS ====================
 
 const getSettings = async () => {
@@ -482,6 +498,8 @@ module.exports = {
     getAllPayments,
     getPaymentById,
     createPayment,
+    updatePayment,
+    deletePayment,
     getSettings,
     updateSettings,
     getAllHolidays,
