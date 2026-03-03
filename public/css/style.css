@@ -687,7 +687,9 @@ tr:hover {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    height: 140px;
+    min-height: 120px;
+    height: auto;
+    overflow: hidden;
     transition: transform 0.3s;
 }
 
@@ -715,6 +717,9 @@ tr:hover {
 .stat-value {
     font-size: 2rem;
     font-weight: 700;
+    line-height: 1.1;
+    overflow: hidden;
+    word-break: break-word;
 }
 
 /* Grid Helper */

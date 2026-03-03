@@ -1423,9 +1423,11 @@ async function updateModalData() {
 
     const payableLabel = document.querySelector('#modal-payable').previousElementSibling;
     if (payableLabel) {
-        // Show breakdown in title
-        payableLabel.innerText = "Net Payable";
-        payableLabel.title = `Base: ₹${Math.round(totalBasePay)} + OT: ₹${Math.round(totalOTPay)} = Earned: ₹${Math.round(earned)}`;
+        // Build initials tag for top-right e.g. (S+OT+F)
+        const tags = ['S'];
+        if (totalOTPay > 0) tags.push('OT');
+        if (totalFare > 0) tags.push('F');
+        payableLabel.innerHTML = `<span style="display:flex;justify-content:space-between;align-items:center;"><span>Net Payable</span><span style="font-size:0.72em;font-weight:normal;opacity:0.65;">(${tags.join('+')})</span></span>`;
     }
 
 
@@ -1448,25 +1450,27 @@ async function updateModalData() {
         }
     }
 
-    // Build structured breakdown box: Basic Salary + OT + Travel
-    const breakdownHtml = `
-        <div style="font-size:0.65em; font-weight:normal; margin-top:0.4rem; border-top:1px solid rgba(255,255,255,0.3); padding-top:0.3rem; line-height:1.7;">
-            <div style="display:flex; justify-content:space-between;"><span>Basic Salary</span><span>₹${Math.round(totalBasePay)}</span></div>
-            ${totalOTPay > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Overtime</span><span>₹${Math.round(totalOTPay)}</span></div>` : ''}
-            ${totalFare > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Travel / Fare</span><span>₹${Math.round(totalFare)}</span></div>` : ''}
-        </div>`;
+    // Update Net Payable Card
+    const payableEl = document.getElementById('modal-payable');
+    const payableCard = payableEl.parentElement;
+
+    // Build compact numbers-only breakdown inside card
+    const numParts = [`₹${Math.round(totalBasePay)}`];
+    if (totalOTPay > 0) numParts.push(`₹${Math.round(totalOTPay)}`);
+    if (totalFare > 0) numParts.push(`₹${Math.round(totalFare)}`);
+    const numbersLine = numParts.join('+');
+    const numHtml = `<div style="font-size:0.6em;font-weight:normal;margin-top:2px;opacity:0.8;">${numbersLine}</div>`;
 
     const dueAmount = Math.round(net - totalPaid);
 
     if (dueAmount <= 0 && totalPaid > 0) {
-        payableEl.innerHTML = `<span style="font-weight: bold;">SETTLED</span> ${breakdownHtml}`;
+        payableEl.innerHTML = `<span style="font-weight:bold;">SETTLED</span>${numHtml}`;
         payableCard.className = 'stat-card card-positive';
     } else if (totalPaid > 0) {
-        payableEl.innerHTML = `₹${dueAmount} ${breakdownHtml}
-            <div style="font-size:0.7em; font-weight:normal; margin-top:0.3rem; border-top:1px solid rgba(255,255,255,0.3); padding-top:0.3rem;">⚠️ Due: ₹${dueAmount} &nbsp;|&nbsp; Paid: ₹${totalPaid}</div>`;
+        payableEl.innerHTML = `₹${dueAmount}${numHtml}<div style="font-size:0.58em;font-weight:normal;margin-top:2px;opacity:0.8;">Due:₹${dueAmount} | Pd:₹${totalPaid}</div>`;
         payableCard.className = 'stat-card card-warning';
     } else {
-        payableEl.innerHTML = `₹${Math.round(net)} ${breakdownHtml}`;
+        payableEl.innerHTML = `₹${Math.round(net)}${numHtml}`;
         payableCard.className = 'stat-card card-neutral';
     }
 
