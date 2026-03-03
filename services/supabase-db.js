@@ -237,18 +237,28 @@ const getSettings = async () => {
         if (error) {
             // If no settings found, return defaults (or create them)
             if (error.code === 'PGRST116') { // specific error for 0 rows
-                return { standardHours: 8.5, slabHours: 6 };
+                return { standardHours: 8.5, slabHours: 6, maintenanceMode: false };
             }
             throw new Error(error.message);
         }
-        return data || { standardHours: 8.5, slabHours: 6 };
+        const result = data || { standardHours: 8.5, slabHours: 6, maintenanceMode: false };
+        // Ensure maintenanceMode is always a proper boolean
+        result.maintenanceMode = Boolean(result.maintenanceMode);
+        return result;
     });
 };
 
 const updateSettings = async (settings) => {
     return retry(async () => {
-        const { data, error } = await supabase.from('settings').update(settings).eq('id', 1).select().single();
+        // Build a clean payload with only known fields
+        const payload = {
+            standardHours: settings.standardHours,
+            slabHours: settings.slabHours,
+            maintenanceMode: settings.maintenanceMode !== undefined ? Boolean(settings.maintenanceMode) : false
+        };
+        const { data, error } = await supabase.from('settings').update(payload).eq('id', 1).select().single();
         if (error) throw new Error(error.message);
+        if (data) data.maintenanceMode = Boolean(data.maintenanceMode);
         return data;
     });
 };

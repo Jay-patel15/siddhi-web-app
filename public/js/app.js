@@ -203,6 +203,15 @@ async function fetchHolidays() {
 function loadSettingsForm() {
     document.getElementById('set-standard-hours').value = globalSettings.standardHours;
     document.getElementById('set-slab-hours').value = globalSettings.slabHours;
+    // Sync maintenance toggle
+    const isOn = !!globalSettings.maintenanceMode;
+    const toggle = document.getElementById('maintenance-toggle');
+    const card = document.getElementById('maintenance-card');
+    if (toggle) toggle.checked = isOn;
+    if (card) {
+        card.style.borderColor = isOn ? '#f87171' : '#6ee7b7';
+        card.style.background = isOn ? '#fff1f2' : '#f0fdf4';
+    }
     // Fetch storage & DB stats when settings page is opened
     fetchStorageUsage();
     fetchDatabaseUsage();
@@ -231,9 +240,31 @@ async function resetSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(defaults)
     });
-    globalSettings = defaults;
+    globalSettings = { ...globalSettings, ...defaults };
     loadSettingsForm();
     alert('Settings Reset!');
+}
+
+async function toggleMaintenanceMode(isOn) {
+    const label = document.getElementById('maintenance-status-label');
+    const card = document.getElementById('maintenance-card');
+    const newSettings = { ...globalSettings, maintenanceMode: isOn };
+    try {
+        await fetch(`${API_URL}/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newSettings)
+        });
+        globalSettings = newSettings;
+        if (card) {
+            card.style.borderColor = isOn ? '#f87171' : '#6ee7b7';
+            card.style.background = isOn ? '#fff1f2' : '#f0fdf4';
+        }
+    } catch (e) {
+        alert('Failed to update maintenance mode.');
+        // Revert toggle on error
+        document.getElementById('maintenance-toggle').checked = !isOn;
+    }
 }
 
 async function fetchStorageUsage() {
@@ -1734,13 +1765,25 @@ async function loadAttendance() {
     loadAttendanceTable();
 }
 
-async function loadAttendanceTable() {
-    let dateInput = document.getElementById('att-filter-date').value;
+function att_filter_date_changed() {
+    const m = document.getElementById('att-filter-month');
+    if (m) m.value = '';
+    loadAttendanceTable();
+}
 
-    if (!dateInput) {
-        const now = new Date();
-        dateInput = now.toISOString().split('T')[0];
-        document.getElementById('att-filter-date').value = dateInput;
+function att_filter_month_changed() {
+    document.getElementById('att-filter-date').value = '';
+    loadAttendanceTable();
+}
+
+async function loadAttendanceTable() {
+    const dateInput = document.getElementById('att-filter-date').value;
+    const monthInput = document.getElementById('att-filter-month') ? document.getElementById('att-filter-month').value : '';
+
+    // Default to today if nothing is selected
+    if (!dateInput && !monthInput) {
+        document.getElementById('att-filter-date').valueAsDate = new Date();
+        return loadAttendanceTable();
     }
 
     const [attRes, empRes] = await Promise.all([
@@ -1757,7 +1800,7 @@ async function loadAttendanceTable() {
     const empFilter = document.getElementById('att-filter-employee') ? document.getElementById('att-filter-employee').value : '';
 
     const filtered = attendanceData
-        .filter(a => a.date === dateInput)
+        .filter(a => monthInput ? a.date.startsWith(monthInput) : a.date === dateInput)
         .filter(a => !empFilter || a.employeeId == empFilter)
         .sort((a, b) => new Date(b.date) - new Date(a.date));
 

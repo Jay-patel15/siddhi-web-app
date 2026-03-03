@@ -297,10 +297,16 @@
                 <div
                     style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
                     <h3>Attendance Records</h3>
-                    <div class="filter-group" style="flex-wrap: wrap;">
+                    <div class="filter-group" style="flex-wrap: wrap; align-items:center;">
                         <div class="filter-item">
                             <label for="att-filter-date" class="filter-label">Filter by Date:</label>
-                            <input type="date" id="att-filter-date" onchange="loadAttendanceTable()"
+                            <input type="date" id="att-filter-date" onchange="att_filter_date_changed()"
+                                class="filter-input">
+                        </div>
+                        <span style="color:var(--gray); font-size:0.85rem; padding:0 0.25rem;">or</span>
+                        <div class="filter-item">
+                            <label for="att-filter-month" class="filter-label">Whole Month:</label>
+                            <input type="month" id="att-filter-month" onchange="att_filter_month_changed()"
                                 class="filter-input">
                         </div>
                         <div class="filter-item">
@@ -376,8 +382,9 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Screenshot Proof</label>
-                        <input type="file" id="adv-screenshot" accept="image/*">
+                        <label>Screenshot Proof <span style="color:#ef4444;">*</span></label>
+                        <input type="file" id="adv-screenshot" accept="image/*" required>
+                        <small style="color:#ef4444;">* Proof is required to save the advance.</small>
                     </div>
                     <div class="form-group">
                         <label>Notes</label>
@@ -477,6 +484,28 @@
 
         <!-- SETTINGS SECTION -->
         <section id="settings" class="section">
+
+            <!-- MAINTENANCE MODE CARD -->
+            <div class="card" id="maintenance-card"
+                style="border: 1.5px solid #6ee7b7; background: #f0fdf4; margin-bottom: 1.5rem; padding: 1rem 1.25rem;">
+                <div style="display:flex; align-items:center; gap:1rem;">
+                    <!-- Toggle on the left -->
+                    <label class="switch" style="flex-shrink:0;">
+                        <input type="checkbox" id="maintenance-toggle" onchange="toggleMaintenanceMode(this.checked)">
+                        <span class="slider" id="maintenance-slider"></span>
+                    </label>
+                    <!-- Text on the right -->
+                    <div>
+                        <h3 id="maintenance-status-label"
+                            style="margin:0; font-size:1rem; color:#0f766e; font-weight:700;">🚧 Maintenance Mode</h3>
+                        <p style="color:#64748b; font-size:0.82rem; margin:0.2rem 0 0;">
+                            When <strong>ON</strong>, employees see a "Site Under Maintenance" page and cannot log in or
+                            interact.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <h3>Global Configuration</h3>
                 <p class="subtitle" style="margin-bottom: 2rem;">Changes here affect all calculations
@@ -499,6 +528,7 @@
                         onclick="resetSettings()">Reset to Defaults</button>
                 </form>
             </div>
+
 
             <!-- Holiday Management Card (Moved from Dashboard) -->
             <div class="card">
@@ -857,8 +887,9 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Payment Proof (Screenshot)</label>
-                    <input type="file" id="pay-screenshot" accept="image/*">
+                    <label>Payment Proof (Screenshot) <span style="color:#ef4444;">*</span></label>
+                    <input type="file" id="pay-screenshot" accept="image/*" required>
+                    <small style="color:#ef4444;">* Proof is required to confirm payment.</small>
                 </div>
                 <div class="form-group">
                     <label>Notes</label>

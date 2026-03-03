@@ -79,7 +79,8 @@ const initDB = () => {
         CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             standardHours REAL DEFAULT 8.5,
-            slabHours REAL DEFAULT 6
+            slabHours REAL DEFAULT 6,
+            maintenanceMode INTEGER DEFAULT 0
         )
     `);
 
@@ -94,7 +95,14 @@ const initDB = () => {
     // Insert default settings if not exists
     const settingsExists = db.prepare('SELECT COUNT(*) as count FROM settings').get();
     if (settingsExists.count === 0) {
-        db.prepare('INSERT INTO settings (id, standardHours, slabHours) VALUES (1, 8.5, 6)').run();
+        db.prepare('INSERT INTO settings (id, standardHours, slabHours, maintenanceMode) VALUES (1, 8.5, 6, 0)').run();
+    } else {
+        // Add column if it doesn't exist (migration)
+        try {
+            db.exec('ALTER TABLE settings ADD COLUMN maintenanceMode INTEGER DEFAULT 0');
+        } catch (e) {
+            // Column likely exists already
+        }
     }
 
     console.log('Database initialized successfully');
@@ -304,16 +312,21 @@ const createPayment = (payment) => {
 // ==================== SETTINGS ====================
 
 const getSettings = () => {
-    return db.prepare('SELECT * FROM settings WHERE id = 1').get();
+    const row = db.prepare('SELECT * FROM settings WHERE id = 1').get();
+    if (row) {
+        row.maintenanceMode = Boolean(row.maintenanceMode);
+    }
+    return row;
 };
 
 const updateSettings = (settings) => {
     const stmt = db.prepare(`
         UPDATE settings 
-        SET standardHours = ?, slabHours = ?
+        SET standardHours = ?, slabHours = ?, maintenanceMode = ?
         WHERE id = 1
     `);
-    stmt.run(settings.standardHours, settings.slabHours);
+    const isMaintenance = settings.maintenanceMode ? 1 : 0;
+    stmt.run(settings.standardHours, settings.slabHours, isMaintenance);
     return getSettings();
 };
 
@@ -326,7 +339,7 @@ const getAllHolidays = () => {
 const setHolidays = (dates) => {
     // Clear existing holidays
     db.prepare('DELETE FROM holidays').run();
-    
+
     // Insert new holidays
     const stmt = db.prepare('INSERT INTO holidays (date) VALUES (?)');
     const insertMany = db.transaction((dates) => {
@@ -334,7 +347,7 @@ const setHolidays = (dates) => {
             stmt.run(date);
         }
     });
-    
+
     insertMany(dates);
     return { success: true };
 };

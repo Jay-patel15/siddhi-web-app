@@ -980,9 +980,71 @@
 </head>
 
 <body>
+
+    <!-- MAINTENANCE MODE OVERLAY -->
+    <div id="maintenance-overlay" style="
+        display:none; position:fixed; inset:0; z-index:99999;
+        background: #131c2e;
+        flex-direction:column; align-items:center; justify-content:center;
+        text-align:center; padding:2rem;
+        font-family:'Inter',system-ui,sans-serif;
+    ">
+        <style>
+            @keyframes maintPulse {
+
+                0%,
+                100% {
+                    opacity: 1;
+                }
+
+                50% {
+                    opacity: 0.6;
+                }
+            }
+
+            #maint-title {
+                animation: maintPulse 2.8s ease-in-out infinite;
+            }
+        </style>
+
+
+
+        <!-- Heading -->
+        <h1 id="maint-title"
+            style="color:#f5a623; font-size:clamp(1.5rem,5vw,2.2rem); font-weight:900; letter-spacing:2px; margin:0 0 1rem; text-transform:uppercase;">
+            🚧 Site Under Maintenance
+        </h1>
+
+        <!-- Subtitle -->
+        <p
+            style="color:#8ba8c8; font-size:clamp(0.95rem,2.5vw,1.1rem); max-width:400px; line-height:1.7; margin:0 0 1.75rem;">
+            We're making improvements for a better experience.<br>
+            Please check back shortly.
+        </p>
+
+        <!-- Status pill -->
+        <div style="display:inline-flex; align-items:center; gap:0.5rem;
+            background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+            border-radius:999px; padding:0.55rem 1.4rem;
+            color:#64748b; font-size:0.875rem;">
+            🔧 Our team is working hard to restore service
+        </div>
+
+        <!-- Top action buttons -->
+        <div style="position:absolute; top:1.25rem; right:1.25rem; display:flex; gap:0.6rem;">
+            <button onclick="localStorage.removeItem('payroll_session'); window.location.href='login.html';" style="
+                background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.25);
+                color:#f87171; font-size:0.82rem; font-weight:600;
+                padding:0.45rem 1rem; border-radius:8px; cursor:pointer;
+                font-family:inherit; transition:background 0.2s;">
+                🚪 Logout
+            </button>
+        </div>
+    </div>
+
     <!-- Header -->
-    <header class="header"
-        style="height: auto; min-height: 80px; align-items: center; display: flex; justify-content: space-between;">
+    <header class="header" id="portal-header"
+        style="display:none; height: auto; min-height: 80px; align-items: center; justify-content: space-between;">
         <div class="brand" style="display: flex; align-items: center; gap: 12px;">
             <!-- Crop container for the lightbulb icon from the flat logo -->
             <div
@@ -1005,7 +1067,7 @@
     </header>
 
     <!-- Main Content -->
-    <main class="main-content">
+    <main class="main-content" id="portal-main" style="display:none;">
         <!-- Single Card Container matching Admin Modal -->
         <div class="card modal-style-card">
 
@@ -1315,6 +1377,29 @@
                 window.location.href = 'login.html';
                 return;
             }
+
+            // --- IMMEDIATE MAINTENANCE MODE CHECK ---
+            try {
+                const initSet = await fetch(`${API_URL}/api/settings`);
+                const initSetData = await initSet.json();
+                if (initSetData && initSetData.maintenanceMode) {
+                    const overlay = document.getElementById('maintenance-overlay');
+                    if (overlay) {
+                        overlay.style.display = 'flex';
+                        document.body.style.overflow = 'hidden';
+                    }
+                    // Hide the main dashboard shell immediately
+                    const mainContent = document.querySelector('.main-content');
+                    if (mainContent) mainContent.style.display = 'none';
+                    return; // HALT COMPLETELY
+                }
+            } catch (e) { console.error("Could not check initial settings:", e) }
+
+            // Maintenance mode is OFF — reveal the page content now
+            const portalHeader = document.getElementById('portal-header');
+            const portalMain = document.getElementById('portal-main');
+            if (portalHeader) portalHeader.style.display = 'flex';
+            if (portalMain) portalMain.style.display = 'block';
 
             // Set default month to current
             const now = new Date();
@@ -1759,6 +1844,18 @@
                 allData.advances = await advRes.json();
                 allData.payments = await payRes.json();
                 allData.settings = await setRes.json();
+
+                // --- UPDATE UI WITH SETTINGS DATA ---
+                const standardHours = allData.settings.standardHours || 8.5;
+                // --- MAINTENANCE MODE CHECK ---
+                if (allData.settings && allData.settings.maintenanceMode) {
+                    const overlay = document.getElementById('maintenance-overlay');
+                    if (overlay) {
+                        overlay.style.display = 'flex';
+                        document.body.style.overflow = 'hidden';
+                    }
+                    return; // Stop all further data loading
+                }
 
                 // Find current employee
                 currentEmployee = allData.employees.find(e => String(e.id) === String(employeeId));
