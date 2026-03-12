@@ -1343,11 +1343,20 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
                         canvas.toBlob((blob) => {
-                            resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+                            if (blob) {
+                                resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+                            } else {
+                                // toBlob failed (can happen for HEIC/unsupported), fall back to original
+                                resolve(file);
+                            }
                         }, 'image/jpeg', quality);
                     };
+                    // If browser can't decode this image format (e.g. HEIC on Android),
+                    // fall back to using the original file uncompressed.
+                    img.onerror = () => resolve(file);
                     img.src = e.target.result;
                 };
+                reader.onerror = () => resolve(file); // FileReader failure — use original
                 reader.readAsDataURL(file);
             });
         }
@@ -1432,9 +1441,40 @@
                     audio: false
                 });
                 video.srcObject = videoStream;
+
+                // Explicitly call play() — some browsers (especially on Android)
+                // block autoplay and won't start the stream without this.
+                try { await video.play(); } catch (_) { /* play() rejection is fine, stream still works */ }
+
+                // Wait until the camera is actually rendering frames (videoWidth > 0).
+                // This is the PRIMARY fix for the "black image" bug — we must NOT allow
+                // the capture button to be enabled until the video element has real dimensions.
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => reject(new Error("Camera timed out. Please try again.")), 10000);
+                    const done = () => { clearTimeout(timeout); resolve(); };
+                    const check = () => {
+                        if (video.videoWidth > 0 && video.videoHeight > 0) done();
+                    };
+                    video.addEventListener('playing', check, { once: false });
+                    video.addEventListener('loadeddata', check, { once: false });
+                    // Also poll every 100ms as a fallback for browsers that don't fire events
+                    const poll = setInterval(() => {
+                        if (video.videoWidth > 0 && video.videoHeight > 0) {
+                            clearInterval(poll);
+                            done();
+                        }
+                    }, 100);
+                    // Already ready? Resolve immediately.
+                    if (video.videoWidth > 0 && video.videoHeight > 0) {
+                        clearInterval(poll);
+                        done();
+                    }
+                });
+
             } catch (err) {
                 let msg = "❌ Camera access denied.";
                 if (err.name === 'NotAllowedError') msg = "❌ Camera permission denied.";
+                else if (err.message) msg = "❌ " + err.message;
                 statusFull.innerHTML = msg;
                 statusFull.className = "status-msg error";
                 throw new Error(msg);
@@ -1448,10 +1488,36 @@
             const MAX_WIDTH = 640;
             let w = video.videoWidth;
             let h = video.videoHeight;
+
+            // Guard 1: video dimensions must be non-zero (stream not ready)
+            if (!w || !h) {
+                throw new Error("Camera is not ready yet. Please wait a moment and try again.");
+            }
+
             if (w > MAX_WIDTH) { h = Math.round(h * (MAX_WIDTH / w)); w = MAX_WIDTH; }
             canvas.width = w;
             canvas.height = h;
             context.drawImage(video, 0, 0, w, h);
+
+            // Guard 2: pixel brightness check — sample a grid of pixels.
+            // A legitimately captured selfie will NEVER be entirely black.
+            // If the average brightness is near 0, the frame is blank/black.
+            const sampleData = context.getImageData(0, 0, w, h);
+            const pixels = sampleData.data; // RGBA array
+            let totalBrightness = 0;
+            const step = Math.floor(pixels.length / 400); // sample ~100 pixels
+            let count = 0;
+            for (let i = 0; i < pixels.length; i += step * 4) {
+                // Rough luminance: (R + G + B) / 3
+                totalBrightness += (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+                count++;
+            }
+            const avgBrightness = count > 0 ? totalBrightness / count : 0;
+            if (avgBrightness < 5) {
+                // Image is essentially black — stream not showing real content yet
+                throw new Error("Camera preview is not ready. Please wait 1-2 seconds and try again.");
+            }
+
             return canvas.toDataURL('image/jpeg', 0.8);
         }
 
@@ -1638,7 +1704,7 @@
                     // Step 2: Upload photo to Supabase Storage
                     if (base64Image) {
                         statusFull.innerHTML = "📤 Uploading photo...";
-                        await fetch(`${API_URL}/api/attendance/upload-photo`, {
+                        const photoRes = await fetch(`${API_URL}/api/attendance/upload-photo`, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 attendanceId: savedRecord.id,
@@ -1647,6 +1713,18 @@
                                 base64Image
                             })
                         });
+                        if (!photoRes.ok) {
+                            const errData = await photoRes.json().catch(() => ({}));
+                            console.warn('Check-in photo upload failed:', errData);
+                            // Attendance is saved — just warn about the photo
+                            statusFull.innerHTML = `⚠️ Attendance saved, but photo could not be uploaded. Please try check-in again.`;
+                            statusFull.className = 'status-msg error';
+                            stopCamera();
+                            document.getElementById('camera-section').style.display = 'none';
+                            captureBtn.style.display = 'none';
+                            await loadEmployeeData(currentEmployee.id);
+                            return;
+                        }
                     }
                 } else {
                     // Check Out logic -> Find the active open shift (today or yesterday)
@@ -1687,7 +1765,7 @@
                     // Step 2: Upload check-out photo
                     if (base64Image) {
                         statusFull.innerHTML = "📤 Uploading photo...";
-                        await fetch(`${API_URL}/api/attendance/upload-photo`, {
+                        const photoRes = await fetch(`${API_URL}/api/attendance/upload-photo`, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 attendanceId: openRecord.id,
@@ -1696,6 +1774,18 @@
                                 base64Image
                             })
                         });
+                        if (!photoRes.ok) {
+                            const errData = await photoRes.json().catch(() => ({}));
+                            console.warn('Check-out photo upload failed:', errData);
+                            // Checkout time IS saved — just warn about the photo
+                            statusFull.innerHTML = `⚠️ Checkout saved (${timeStr}), but photo could not be uploaded. Please try again.`;
+                            statusFull.className = 'status-msg error';
+                            stopCamera();
+                            document.getElementById('camera-section').style.display = 'none';
+                            captureBtn.style.display = 'none';
+                            await loadEmployeeData(currentEmployee.id);
+                            return;
+                        }
                     }
                 }
 
@@ -1714,8 +1804,20 @@
 
 
         async function handleAttendanceAction() {
-            const base64 = captureImage();
-            // Optional: Compress here if we wanted to send a blob, but we use base64 JSON
+            let base64;
+            try {
+                base64 = captureImage();
+            } catch (err) {
+                // captureImage() throws if the video frame isn't ready or is all black.
+                // Show the error and re-enable the button so the employee can try again.
+                const statusFull = document.getElementById('attendance-status');
+                const captureBtn = document.getElementById('btn-capture');
+                statusFull.innerHTML = `⚠️ ${err.message}`;
+                statusFull.className = 'status-msg error';
+                statusFull.style.display = 'block';
+                if (captureBtn) captureBtn.disabled = false;
+                return;
+            }
             await submitAttendanceAction(pendingAttendance.type, pendingAttendance.location, base64);
         }
 

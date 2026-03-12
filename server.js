@@ -25,7 +25,8 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '15012002J^aya';
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '10mb' }));   // Increased from default 100KB — needed for base64 photo uploads
+app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Redirect old MPA pages to SPA index.html
