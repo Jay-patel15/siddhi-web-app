@@ -679,24 +679,13 @@ async function loadDashboard() {
         return dedMonth === currentMonth;
     }).reduce((sum, a) => sum + a.amount, 0);
 
+    const totalPaid = paymentsData.filter(p => {
+        return p.salaryMonth === currentMonth;
+    }).reduce((sum, p) => sum + p.amount, 0);
+
     // Calculate Total Pending Dues (Monthly Net Payable)
-    // Formula per user request: Total Payroll (Month) - Total Advances (Month)
-    // Note: This effectively shows "Net Salary Payable" for the month.
-    let totalPendingDues = totalPayroll - totalAdvances;
-
-    // Also subtract payments made this month to show meaningful "Pending" (Remaining) amount?
-    // User specifically asked for "subtraction of Total Payroll (January)-Total Advances (January)".
-    // So distinct Payroll - Advances is the base request. 
-    // However, usually "Pending" implies unpaid. Let's start with their formula.
-    // To be safe, I'll calculate it as Net Payable for the month.
-
-    // If we want "True Pending" (unpaid), we should also subtract payments.
-    // const totalPaymentsMonth = paymentsData.filter(p => p.salaryMonth === currentMonth).reduce((sum, p) => sum + p.amount, 0);
-    // totalPendingDues -= totalPaymentsMonth;
-
-    // BUT the user said "its adding both", implying they want the difference strictly. I will assume they mean Net Payable.
-    // If they want 'Remaining Dues', they would ask to subtract payments.
-    // I will stick to: Payroll - Advances.
+    // Formula: Total Payroll (Month) - Total Advances (Month) - Total Paid (Month)
+    let totalPendingDues = totalPayroll - totalAdvances - totalPaid;
 
     document.getElementById('dash-curr-payroll').innerText = '₹' + Math.round(totalPayroll).toLocaleString();
 
@@ -706,6 +695,13 @@ async function loadDashboard() {
         pendingLabel.innerText = `Total Net Payable (${new Date(filterMonth + '-01').toLocaleString('default', { month: 'long' })})`;
     }
     document.getElementById('dash-pending-dues').innerText = '₹' + Math.round(totalPendingDues).toLocaleString();
+    
+    // Update Paid Label to show Month
+    const paidLabel = document.getElementById('dash-paid').previousElementSibling;
+    if (paidLabel) {
+        paidLabel.innerText = `Total Payroll Paid (${new Date(filterMonth + '-01').toLocaleString('default', { month: 'long' })})`;
+    }
+    document.getElementById('dash-paid').innerText = '₹' + Math.round(totalPaid).toLocaleString();
 
     document.getElementById('dash-advances').innerText = '₹' + Math.round(totalAdvances).toLocaleString();
 
