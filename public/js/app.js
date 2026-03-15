@@ -618,7 +618,7 @@ async function loadDashboard() {
         if (!Array.isArray(advancesData)) advancesData = [];
 
         const payData = await payRes.json();
-        const paymentsData = Array.isArray(payData) ? payData : [];
+        paymentsData = Array.isArray(payData) ? payData : [];
     } catch (e) {
         console.error("Dashboard Load Error (Detailed):", e);
         const container = document.getElementById('employee-cards-container');
