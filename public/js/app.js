@@ -653,8 +653,21 @@ async function loadDashboard() {
 
     // Quick client-side payroll calc for dashboard stat (Filtered by Month)
     let totalPayroll = 0;
+
+    // OPTIMIZATION: Group attendance by employee for the current month once (O(M))
+    const monthlyAttByEmp = new Map();
+    attendanceData.forEach(a => {
+        if (a.date.startsWith(currentMonth)) {
+            if (!monthlyAttByEmp.has(a.employeeId)) {
+                monthlyAttByEmp.set(a.employeeId, []);
+            }
+            monthlyAttByEmp.get(a.employeeId).push(a);
+        }
+    });
+
     employeesData.forEach(emp => {
-        const empAtt = attendanceData.filter(a => a.employeeId === emp.id && a.date.startsWith(currentMonth));
+        // O(1) lookup instead of O(M) filter
+        const empAtt = monthlyAttByEmp.get(String(emp.id)) || [];
         let empEarned = 0;
         empAtt.forEach(att => {
             const wh = parseFloat(att.workedHours);
