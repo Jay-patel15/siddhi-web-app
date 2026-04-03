@@ -1117,6 +1117,17 @@
                         📸 Capture & Save
                     </button>
 
+                    <div id="attendance-timer-container" style="display: none; align-items: center; justify-content: center; flex-direction: column; margin-top: 1.5rem; margin-bottom: 1rem; gap: 0.5rem;">
+                        <div style="color: #10b981; font-weight: bold; font-size: 1.1rem;">In</div>
+                        <div style="display: flex; gap: 0.5rem; font-size: 1.8rem; font-weight: bold; font-family: monospace;">
+                            <div style="background: #111; color: white; padding: 0.5rem 0.75rem; border-radius: 8px;" id="timer-hh">00</div>
+                            <div style="display: flex; align-items: center; justify-content: center; color: var(--dark);">:</div>
+                            <div style="background: #111; color: white; padding: 0.5rem 0.75rem; border-radius: 8px;" id="timer-mm">00</div>
+                            <div style="display: flex; align-items: center; justify-content: center; color: var(--dark);">:</div>
+                            <div style="background: #111; color: white; padding: 0.5rem 0.75rem; border-radius: 8px;" id="timer-ss">00</div>
+                        </div>
+                    </div>
+
                     <div class="action-btns">
                         <button id="btn-check-in" class="btn-checkin" onclick="startAttendanceFlow('in')" disabled
                             style="opacity: 0.5; cursor: not-allowed;">
@@ -1131,6 +1142,15 @@
                     <div id="attendance-status" class="status-msg" style="display: none;"></div>
                     <div id="security-status" class="security-indicator" style="display: none;">
                         🛡️ Security: <span id="security-accuracy">Detecting location...</span>
+                    </div>
+
+                    <!-- Upload Overlay -->
+                    <div id="upload-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; color: white; padding: 2rem; text-align: center;">
+                        <div style="border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid #10b981; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 1.5rem;"></div>
+                        <h2 style="margin-bottom: 0.5rem; color: white;">Uploading Photo...</h2>
+                        <p style="color: #cbd5e1; font-weight: 600;">Please wait and do not close the app.</p>
+                        <img id="upload-preview-img" src="" style="margin-top: 2rem; max-height: 40vh; max-width: 90vw; border-radius: 12px; border: 2px solid rgba(255,255,255,0.2);">
+                        <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
                     </div>
                 </div>
 
@@ -1372,6 +1392,7 @@
         };
         let pendingAttendance = null;
         let videoStream = null;
+        let attendanceTimerInterval = null;
 
         // Check session on load
         window.onload = async function () {
@@ -1580,20 +1601,72 @@
             btnIn.style.display = 'flex'; btnOut.style.display = 'flex';
             statusMsg.style.display = 'none';
 
+            const timerContainer = document.getElementById('attendance-timer-container');
+            const hhEl = document.getElementById('timer-hh');
+            const mmEl = document.getElementById('timer-mm');
+            const ssEl = document.getElementById('timer-ss');
+            if (attendanceTimerInterval) clearInterval(attendanceTimerInterval);
+
             if (openShift) {
                 // There is an ongoing shift that needs a checkout (could be from yesterday!)
-                btnIn.disabled = true; btnOut.disabled = false;
+                btnIn.disabled = true;
                 btnIn.style.display = 'none'; // hide check in
                 instr.innerText = openShift.date === yesterdayStr ? "Working... Reminder: You are checking out for yesterday's shift." : "Working... Remember to check out.";
                 btnOut.innerHTML = "🔓 Check Out";
+                
+                timerContainer.style.display = 'flex';
+                
+                // Parse check-in time into Date object
+                let inDateObj = new Date(`${openShift.date}T${openShift.timeIn}:00`);
+                
+                // Try to use exact milliseconds if checked in recently on this device
+                const exactCheckInStr = sessionStorage.getItem('exactCheckInTime');
+                if (exactCheckInStr) {
+                    const exactCheckIn = parseInt(exactCheckInStr, 10);
+                    if (Math.abs(exactCheckIn - inDateObj.getTime()) < 60000) {
+                        inDateObj = new Date(exactCheckIn);
+                    }
+                }
+                
+                function updateTimer() {
+                    const now = new Date();
+                    const diffSecs = Math.floor((now - inDateObj) / 1000);
+                    
+                    if (diffSecs >= 0) {
+                        const hh = Math.floor(diffSecs / 3600);
+                        const mm = Math.floor((diffSecs % 3600) / 60);
+                        const ss = diffSecs % 60;
+                        hhEl.innerText = String(hh).padStart(2, '0');
+                        mmEl.innerText = String(mm).padStart(2, '0');
+                        ssEl.innerText = String(ss).padStart(2, '0');
+                        
+                        // Wait exactly 15 minutes (900 seconds) before unlock
+                        if (diffSecs < 900) {
+                            btnOut.disabled = true;
+                            btnOut.style.opacity = '0.5';
+                            btnOut.style.cursor = 'not-allowed';
+                            btnOut.innerHTML = `🔒 Wait ${Math.ceil((900 - diffSecs) / 60)}m`;
+                        } else {
+                            btnOut.disabled = false;
+                            btnOut.style.opacity = '1';
+                            btnOut.style.cursor = 'pointer';
+                            btnOut.innerHTML = "🔓 Check Out";
+                        }
+                    }
+                }
+                updateTimer();
+                attendanceTimerInterval = setInterval(updateTimer, 1000);
+
             } else if (!todayRecord) {
                 // No open shift, and no record for today at all. Ready to start new day.
+                timerContainer.style.display = 'none';
                 btnIn.disabled = false; btnOut.disabled = true;
                 btnOut.style.display = 'none'; // hide until checked in
                 instr.innerText = "Check in to start your work today.";
                 btnIn.innerHTML = "🔒 Check In";
             } else {
                 // Today's shift is fully complete (has both timeIn and timeOut)
+                timerContainer.style.display = 'none';
                 btnIn.disabled = true; btnOut.disabled = true;
                 btnIn.innerHTML = "✅ Checked In"; btnOut.innerHTML = "✅ Checked Out";
                 instr.innerText = "Shift completed for today. Great job!";
@@ -1700,10 +1773,19 @@
                     });
                     if (!res.ok) throw new Error("Server error saving attendance");
                     savedRecord = await res.json();
+                    
+                    // Save exact start time locally for a smoother timer initialization
+                    sessionStorage.setItem('exactCheckInTime', now.getTime());
 
                     // Step 2: Upload photo to Supabase Storage
                     if (base64Image) {
                         statusFull.innerHTML = "📤 Uploading photo...";
+                        const overlay = document.getElementById('upload-overlay');
+                        const previewImg = document.getElementById('upload-preview-img');
+                        if (overlay && previewImg) {
+                            previewImg.src = base64Image;
+                            overlay.style.display = 'flex';
+                        }
                         const photoRes = await fetch(`${API_URL}/api/attendance/upload-photo`, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1713,6 +1795,8 @@
                                 base64Image
                             })
                         });
+                        if (overlay) overlay.style.display = 'none';
+                        
                         if (!photoRes.ok) {
                             const errData = await photoRes.json().catch(() => ({}));
                             console.warn('Check-in photo upload failed:', errData);
@@ -1765,6 +1849,12 @@
                     // Step 2: Upload check-out photo
                     if (base64Image) {
                         statusFull.innerHTML = "📤 Uploading photo...";
+                        const overlay = document.getElementById('upload-overlay');
+                        const previewImg = document.getElementById('upload-preview-img');
+                        if (overlay && previewImg) {
+                            previewImg.src = base64Image;
+                            overlay.style.display = 'flex';
+                        }
                         const photoRes = await fetch(`${API_URL}/api/attendance/upload-photo`, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1774,6 +1864,8 @@
                                 base64Image
                             })
                         });
+                        if (overlay) overlay.style.display = 'none';
+                        
                         if (!photoRes.ok) {
                             const errData = await photoRes.json().catch(() => ({}));
                             console.warn('Check-out photo upload failed:', errData);
