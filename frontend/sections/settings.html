@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Settings | Siddhi Electricals</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="icon" type="image/png" href="../assets/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script>
+        (function () {
+            const s = localStorage.getItem('payroll_session');
+            if (!s) { window.location.href = '/login.html'; return; }
+            try { const d = JSON.parse(s); if (d.role === 'employee') window.location.replace('/employee-portal.html'); } catch(e) {}
+        })();
+    </script>
+</head>
+<body data-page="settings">
+
+    <div class="overlay" onclick="toggleSidebar()"></div>
+
+    <nav class="sidebar" id="sidebar">
+        <div class="brand" style="display:flex;align-items:center;gap:12px;margin-bottom:2.5rem;">
+            <div style="width:55px;height:55px;overflow:hidden;display:flex;align-items:center;flex-shrink:0;">
+                <img src="../assets/logo-horizontal.png" alt="Icon" style="height:55px;width:auto;max-width:none;">
+            </div>
+            <div style="display:flex;flex-direction:column;line-height:1.15;">
+                <span style="color:var(--primary);font-size:1.5rem;font-weight:800;">Siddhi</span>
+                <span style="color:var(--primary);font-size:1.5rem;font-weight:800;">Electricals</span>
+            </div>
+        </div>
+        <ul class="nav-links">
+            <li class="nav-item" data-section="dashboard"  onclick="location.href='/sections/dashboard.html'">🏠 Dashboard</li>
+            <li class="nav-item" data-section="employees"  onclick="location.href='/sections/employees.html'">👥 Employees</li>
+            <li class="nav-item" data-section="attendance" onclick="location.href='/sections/attendance.html'">🕒 Attendance</li>
+            <li class="nav-item" data-section="advance"    onclick="location.href='/sections/advance.html'">💲 Advance Payments</li>
+            <li class="nav-item" data-section="payroll"    onclick="location.href='/sections/payroll.html'">📄 Payroll</li>
+            <li class="nav-item" data-section="uploads"    onclick="location.href='/sections/uploads.html'">📷 Uploads</li>
+            <li class="nav-item" data-section="attPhotos"  onclick="location.href='/sections/attPhotos.html'">📸 Att. Photos</li>
+        </ul>
+        <div class="nav-settings">
+            <li class="nav-item" data-section="settings"   onclick="location.href='/sections/settings.html'">⚙️ Settings</li>
+            <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn">
+                <span class="toggle-icon">🌙</span> <span id="dark-mode-label">Dark Mode</span>
+            </button>
+            <li class="nav-item" style="color:var(--danger)" onclick="logout()">🚪 Logout</li>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <header style="display:flex;align-items:center;gap:1rem;">
+            <button class="hamburger-btn" onclick="toggleSidebar()" style="display:none;background:none;border:none;font-size:1.5rem;cursor:pointer;padding:0.5rem;">☰</button>
+        </header>
+        <div id="sections-container">
+            <section id="settings" class="section active">
+
+                <!-- MAINTENANCE MODE CARD -->
+                <div class="card" id="maintenance-card" style="border:1.5px solid #6ee7b7;background:#f0fdf4;margin-bottom:1.5rem;padding:1rem 1.25rem;">
+                    <div style="display:flex;align-items:center;gap:1rem;">
+                        <label class="switch" style="flex-shrink:0;">
+                            <input type="checkbox" id="maintenance-toggle" onchange="toggleMaintenanceMode(this.checked)">
+                            <span class="slider" id="maintenance-slider"></span>
+                        </label>
+                        <div>
+                            <h3 id="maintenance-status-label" style="margin:0;font-size:1rem;color:#0f766e;font-weight:700;">🚧 Maintenance Mode</h3>
+                            <p style="color:#64748b;font-size:0.82rem;margin:0.2rem 0 0;">When <strong>ON</strong>, employees see a "Site Under Maintenance" page and cannot log in or interact.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Global Configuration</h3>
+                    <p class="subtitle" style="margin-bottom:2rem;">Changes here affect all calculations immediately.</p>
+                    <form id="settings-form">
+                        <div class="form-group">
+                            <label>Standard Working Hours (Day)</label>
+                            <input type="number" id="set-standard-hours" step="0.1" required>
+                            <small style="color:var(--gray)">Default: 8.5. Used to calculate Normal Hourly Rate.</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Slab Base Hours</label>
+                            <input type="number" id="set-slab-hours" step="0.1" required>
+                            <small style="color:var(--gray)">Default: 6. Used to calculate Slab Hourly Rate.</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Settings</button>
+                        <button type="button" class="btn" style="background:var(--dark);color:white;" onclick="resetSettings()">Reset to Defaults</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h3>Holiday Management</h3>
+                    <div class="filter-group" style="flex-wrap:wrap;align-items:flex-end;">
+                        <div class="filter-item" style="flex-direction:column;align-items:flex-start;gap:0.25rem;">
+                            <label class="filter-label">Select Date</label>
+                            <input type="date" id="holiday-date-picker" class="filter-input">
+                        </div>
+                        <button class="btn" style="background:var(--danger);color:white;" onclick="markHoliday()">Mark Holiday</button>
+                        <button class="btn" style="background:var(--dark);color:white;" onclick="openHolidayModal()">Manage List</button>
+                    </div>
+                </div>
+
+                <hr style="margin:2rem 0;border:0;border-top:1px solid #e2e8f0;">
+
+                <div class="card" id="storage-tracker-card" style="margin-bottom:2rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                        <h3 style="margin:0;">📦 Storage Usage</h3>
+                        <button class="btn" style="background:var(--light);border:1px solid var(--gray);font-size:0.85rem;" onclick="fetchStorageUsage()">Refresh</button>
+                    </div>
+                    <p style="color:var(--gray);font-size:0.9rem;margin-bottom:1rem;">Free tier limit is 1 GB for uploaded files (Images/PDFs).</p>
+                    <div style="background:var(--light);border-radius:8px;padding:1rem;border:1px solid #e2e8f0;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;font-weight:500;">
+                            <span id="storage-used-text">Loading...</span><span id="storage-limit-text">1024 MB Limit</span>
+                        </div>
+                        <div style="width:100%;background-color:#e0e7ff;border-radius:20px;height:12px;overflow:hidden;">
+                            <div id="storage-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#10b981,#14b8a6);transition:width 0.5s ease-in-out;"></div>
+                        </div>
+                        <div id="storage-file-count" style="text-align:right;font-size:0.8rem;color:var(--gray);margin-top:0.5rem;">Total Files: 0</div>
+                    </div>
+                </div>
+
+                <div class="card" id="database-tracker-card" style="margin-bottom:2rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                        <h3 style="margin:0;">🗄️ Database Size Usage</h3>
+                        <button class="btn" style="background:var(--light);border:1px solid var(--gray);font-size:0.85rem;" onclick="fetchDatabaseUsage()">Refresh</button>
+                    </div>
+                    <p style="color:var(--gray);font-size:0.9rem;margin-bottom:1rem;">Free tier limit is 500 MB for text and data tables.</p>
+                    <div style="background:var(--light);border-radius:8px;padding:1rem;border:1px solid #e2e8f0;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;font-weight:500;">
+                            <span id="database-used-text">Loading...</span><span id="database-limit-text">500 MB Limit</span>
+                        </div>
+                        <div style="width:100%;background-color:#e0e7ff;border-radius:20px;height:12px;overflow:hidden;">
+                            <div id="database-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#60a5fa);transition:width 0.5s ease-in-out;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom:2rem;border-left:4px solid var(--primary);">
+                    <h3 style="margin-top:0;">📥 Download All Data (Excel Export)</h3>
+                    <p style="color:var(--gray);font-size:0.9rem;margin-bottom:1.5rem;">Export your Employees, Attendance, Advances, and Payments into separated tabs in an Excel file.</p>
+                    <div style="display:flex;gap:1rem;margin-bottom:1.5rem;max-width:400px;flex-wrap:wrap;">
+                        <div class="form-group" style="flex:1;min-width:140px;"><label style="font-weight:600;">From Date</label><input type="date" id="export-all-start-date" value="2026-03-01"></div>
+                        <div class="form-group" style="flex:1;min-width:140px;"><label style="font-weight:600;">To Date</label><input type="date" id="export-all-end-date" value="2026-03-31"></div>
+                    </div>
+                    <button class="btn btn-primary" style="width:100%;padding:1rem;font-size:1.1rem;display:flex;align-items:center;justify-content:center;gap:0.5rem;" onclick="exportAllDataToExcel()">
+                        <span style="font-size:1.3rem;">⬇️</span> Download All Data (Excel)
+                    </button>
+                </div>
+
+                <div class="card" style="margin-bottom:2rem;border-left:4px solid var(--primary);">
+                    <h3 style="margin-top:0;">📤 Upload Data (Excel Import)</h3>
+                    <p style="color:var(--gray);font-size:0.9rem;margin-bottom:1.5rem;">Upload a previously downloaded Siddhi Excel file to restore or add data to the system.</p>
+                    <div class="form-group" style="max-width:400px;margin-bottom:1.5rem;">
+                        <label style="font-weight:600;">Select Excel File (.xlsx)</label>
+                        <input type="file" id="import-excel-file" accept=".xlsx, .xls">
+                        <small style="color:var(--gray);display:block;margin-top:0.5rem;">Data will be intelligently merged automatically.</small>
+                    </div>
+                    <button class="btn btn-primary" style="width:100%;padding:1rem;font-size:1.1rem;display:flex;align-items:center;justify-content:center;gap:0.5rem;" onclick="importExcelData()">
+                        <span style="font-size:1.3rem;">⬆️</span> Upload &amp; Import Data
+                    </button>
+                </div>
+
+                <div class="card" style="background:#fff1f2;border:1px solid #fecdd3;">
+                    <h4 style="color:#be123c;margin-top:0;">Danger Zone</h4>
+                    <p style="color:#be123c;font-size:0.9rem;margin-bottom:1rem;">Destructive actions. Proceed with caution.</p>
+                    <button class="btn" style="background:#e11d48;color:white;" onclick="confirmFactoryReset()">⚠ Clear Table Data (Keep Images)</button>
+                </div>
+
+            </section>
+        </div>
+    </main>
+
+    <!-- HOLIDAY LIST MODAL -->
+    <div id="holiday-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1001;justify-content:center;align-items:center;">
+        <div class="card" style="width:90%;max-width:400px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                <h3>Manage Holidays</h3>
+                <button class="btn" onclick="document.getElementById('holiday-modal').style.display='none'">Close</button>
+            </div>
+            <div class="table-container" style="max-height:300px;overflow-y:auto;">
+                <table><thead><tr><th>Date</th><th>Action</th></tr></thead><tbody id="holiday-list-body"></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/app.js"></script>
+</body>
+</html>

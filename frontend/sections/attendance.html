@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Attendance | Siddhi Electricals</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="icon" type="image/png" href="../assets/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        (function () {
+            const s = localStorage.getItem('payroll_session');
+            if (!s) { window.location.href = '/login.html'; return; }
+            try { const d = JSON.parse(s); if (d.role === 'employee') window.location.replace('/employee-portal.html'); } catch(e) {}
+        })();
+    </script>
+</head>
+<body data-page="attendance">
+
+    <div class="overlay" onclick="toggleSidebar()"></div>
+
+    <nav class="sidebar" id="sidebar">
+        <div class="brand" style="display:flex;align-items:center;gap:12px;margin-bottom:2.5rem;">
+            <div style="width:55px;height:55px;overflow:hidden;display:flex;align-items:center;flex-shrink:0;">
+                <img src="../assets/logo-horizontal.png" alt="Icon" style="height:55px;width:auto;max-width:none;">
+            </div>
+            <div style="display:flex;flex-direction:column;line-height:1.15;">
+                <span style="color:var(--primary);font-size:1.5rem;font-weight:800;">Siddhi</span>
+                <span style="color:var(--primary);font-size:1.5rem;font-weight:800;">Electricals</span>
+            </div>
+        </div>
+        <ul class="nav-links">
+            <li class="nav-item" data-section="dashboard"  onclick="location.href='/sections/dashboard.html'">🏠 Dashboard</li>
+            <li class="nav-item" data-section="employees"  onclick="location.href='/sections/employees.html'">👥 Employees</li>
+            <li class="nav-item" data-section="attendance" onclick="location.href='/sections/attendance.html'">🕒 Attendance</li>
+            <li class="nav-item" data-section="advance"    onclick="location.href='/sections/advance.html'">💲 Advance Payments</li>
+            <li class="nav-item" data-section="payroll"    onclick="location.href='/sections/payroll.html'">📄 Payroll</li>
+            <li class="nav-item" data-section="uploads"    onclick="location.href='/sections/uploads.html'">📷 Uploads</li>
+            <li class="nav-item" data-section="attPhotos"  onclick="location.href='/sections/attPhotos.html'">📸 Att. Photos</li>
+        </ul>
+        <div class="nav-settings">
+            <li class="nav-item" data-section="settings"   onclick="location.href='/sections/settings.html'">⚙️ Settings</li>
+            <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn">
+                <span class="toggle-icon">🌙</span> <span id="dark-mode-label">Dark Mode</span>
+            </button>
+            <li class="nav-item" style="color:var(--danger)" onclick="logout()">🚪 Logout</li>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <header style="display:flex;align-items:center;gap:1rem;">
+            <button class="hamburger-btn" onclick="toggleSidebar()" style="display:none;background:none;border:none;font-size:1.5rem;cursor:pointer;padding:0.5rem;">☰</button>
+        </header>
+        <div id="sections-container">
+            <section id="attendance" class="section active">
+
+                <div class="card">
+                    <h3>Mark Daily Attendance</h3>
+                    <form id="attendance-form">
+                        <input type="hidden" id="att-id">
+                        <div class="form-group"><label>Date</label><input type="date" id="att-date" required></div>
+                        <div class="form-group"><label>Employee</label><select id="att-employee" required><option value="">Select Employee</option></select></div>
+
+                        <div class="switch-wrapper">
+                            <label class="switch"><input type="checkbox" id="att-slab-mode"><span class="slider round"></span></label>
+                            <div><strong>Slab Piping Mode (Enable after 10.30 hrs)</strong><p style="font-size:0.8rem;color:var(--gray)">Toggle ON for fixed slab payment (8.5h + 6h Bonus)</p></div>
+                        </div>
+
+                        <div class="switch-wrapper">
+                            <label class="switch"><input type="checkbox" id="att-sunday-mode"><span class="slider round"></span></label>
+                            <div><strong>Sunday / Full Day Mode</strong><p style="font-size:0.8rem;color:var(--gray)">Toggle ON to count as a full day salary regardless of hours worked.</p></div>
+                        </div>
+
+                        <div class="form-group"><label>Time In</label><input type="time" id="att-time-in"></div>
+                        <div class="form-group"><label>Time Out</label><input type="time" id="att-time-out"></div>
+                        <div class="form-group"><label>Daily Fare (₹)</label><input type="number" id="att-fare" placeholder="0"></div>
+
+                        <button type="submit" class="btn btn-primary btn-block" id="att-submit-btn">Submit Attendance</button>
+                        <button type="button" class="btn btn-block" id="att-cancel-btn"
+                            style="display:none;background:var(--gray);color:white;margin-top:0.5rem;" onclick="resetAttendanceForm()">Cancel Edit</button>
+                        <div id="att-result" style="margin-top:1rem;font-weight:bold;color:var(--secondary)"></div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
+                        <h3>Attendance Records</h3>
+                        <div class="filter-group" style="flex-wrap:wrap;align-items:center;">
+                            <div class="filter-item">
+                                <label for="att-filter-date" class="filter-label">Filter by Date:</label>
+                                <input type="date" id="att-filter-date" onchange="att_filter_date_changed()" class="filter-input">
+                            </div>
+                            <span style="color:var(--gray);font-size:0.85rem;padding:0 0.25rem;">or</span>
+                            <div class="filter-item">
+                                <label for="att-filter-month" class="filter-label">Whole Month:</label>
+                                <input type="month" id="att-filter-month" onchange="att_filter_month_changed()" class="filter-input">
+                            </div>
+                            <div class="filter-item">
+                                <label for="att-filter-employee" class="filter-label">Employee:</label>
+                                <select id="att-filter-employee" onchange="loadAttendanceTable()" class="filter-input">
+                                    <option value="">All Employees</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th><th>Employee</th><th>Time In</th><th>In Links</th>
+                                    <th>Time Out</th><th>Out Links</th><th>Hours</th><th>Mode</th>
+                                    <th>Salary (Est.)</th><th>Fare</th><th>Total</th><th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendance-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </section>
+        </div>
+    </main>
+
+    <!-- Minimal required modals -->
+    <div id="image-preview-overlay" class="image-preview-overlay" onclick="closeImagePreview(event)">
+        <div onclick="event.stopPropagation()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:0.75rem 1rem;flex-shrink:0;gap:0.5rem;">
+            <span id="preview-counter" style="color:white;font-size:0.9rem;font-weight:600;">1/1</span>
+            <button onclick="downloadCurrentImage()" style="background:var(--primary);color:white;border:none;padding:0.45rem 1.2rem;border-radius:20px;font-size:0.85rem;cursor:pointer;font-weight:600;">⬇ Download</button>
+            <button onclick="closeImagePreview()" style="background:rgba(255,255,255,0.15);color:white;border:none;width:36px;height:36px;border-radius:50%;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+        </div>
+        <div onclick="event.stopPropagation()" style="flex:1;width:100%;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;padding:0 3.5rem;">
+            <button id="preview-prev" onclick="prevImage()" style="position:absolute;left:0.5rem;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;width:44px;height:44px;border-radius:50%;font-size:1.4rem;cursor:pointer;color:white;display:flex;align-items:center;justify-content:center;z-index:1;">◀</button>
+            <img id="preview-image" src="" alt="Preview" style="max-width:100%;max-height:75vh;object-fit:contain;border-radius:10px;">
+            <button id="preview-next" onclick="nextImage()" style="position:absolute;right:0.5rem;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;width:44px;height:44px;border-radius:50%;font-size:1.4rem;cursor:pointer;color:white;display:flex;align-items:center;justify-content:center;z-index:1;">▶</button>
+        </div>
+        <div class="image-preview-info" id="preview-info" onclick="event.stopPropagation()" style="width:100%;text-align:center;padding:0.75rem 1rem;color:white;font-size:0.95rem;font-weight:600;flex-shrink:0;background:rgba(0,0,0,0.4);"></div>
+    </div>
+
+    <script src="../js/app.js"></script>
+</body>
+</html>

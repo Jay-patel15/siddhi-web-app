@@ -94,11 +94,14 @@ let paymentsData = []; // Added
 let currentModalEmployee = null;
 let currentModalMonth = null;
 
+// Track which sections have already been loaded (lazy loading)
+const loadedSections = new Set();
+
 // Check authentication on page load
 function checkAuth() {
     const sessionStr = localStorage.getItem('payroll_session');
     if (!sessionStr) {
-        window.location.href = 'login.html';
+        window.location.href = '/login.html';
         return false;
     }
 
@@ -108,12 +111,12 @@ function checkAuth() {
 
     if (now - session.timestamp > limit) {
         localStorage.removeItem('payroll_session');
-        window.location.href = 'login.html';
+        window.location.href = '/login.html';
         return false;
     }
 
     if (session.role !== 'admin') {
-        window.location.href = 'employee-portal.html';
+        window.location.href = '/employee-portal.html';
         return false;
     }
     return true;
@@ -122,33 +125,60 @@ function checkAuth() {
 // Logout function
 function logout() {
     localStorage.removeItem('payroll_session');
-    window.location.href = 'login.html';
+    window.location.href = '/login.html';
 }
 
 // Init
 async function init() {
     if (!checkAuth()) return;
+
     setDefaultMonthFilters();
     await fetchSettings();
     await fetchHolidays();
 
-    // In SPA, always start with dashboard unless specified?
-    showSection('dashboard');
+    // Detect if we are on a standalone MPA section page (body has data-page attribute)
+    const currentPage = document.body.dataset.page;
+
+    if (currentPage) {
+        // ---- STANDALONE MPA MODE ----
+        // Mark the current section as loaded so showSection() won't double-fetch
+        loadedSections.add(currentPage);
+
+        // Highlight the correct nav item
+        document.querySelectorAll('.nav-item').forEach(item => {
+            if (item.dataset.section === currentPage) {
+                item.classList.add('active');
+            }
+        });
+
+        // Load data for this specific page only
+        if (currentPage === 'dashboard')   loadDashboard();
+        else if (currentPage === 'employees')  loadEmployees();
+        else if (currentPage === 'attendance') loadAttendance();
+        else if (currentPage === 'advance')    loadAdvanceForm();
+        else if (currentPage === 'payroll')    loadPayroll();
+        else if (currentPage === 'uploads')    loadUploadsPage();
+        else if (currentPage === 'attPhotos')  loadAttendancePhotos();
+        else if (currentPage === 'settings')   loadSettingsForm();
+
+        // Init form listeners for this section
+        _initSection(currentPage);
+
+    } else {
+        // ---- SPA MODE (index.html) ----
+        // Pre-mark any sections already embedded in the DOM
+        document.querySelectorAll('#sections-container .section').forEach(sec => {
+            if (sec.id) loadedSections.add(sec.id);
+        });
+        showSection('dashboard');
+    }
 }
 
-// Navigation (Restored for SPA)
-function showSection(sectionId) {
-    // Hide all sections
-    document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
-    // Show target section
-    const target = document.getElementById(sectionId);
-    if (target) {
-        target.classList.add('active');
-    }
-
-    // Update active nav link
+// Navigation — lazy-loads section HTML partials on first visit
+async function showSection(sectionId) {
+    // Update active nav link immediately
     document.querySelectorAll('.nav-links .nav-item').forEach(item => {
-        if (item.getAttribute('onclick')?.includes(`'${sectionId}'`)) {
+        if (item.dataset.section === sectionId || item.getAttribute('onclick')?.includes(`'${sectionId}'`)) {
             item.classList.add('active');
         } else {
             item.classList.remove('active');
@@ -157,7 +187,38 @@ function showSection(sectionId) {
 
     closeSidebarOnMobile();
 
-    // Call section-specific loads
+    // If section not yet in DOM, fetch and inject it
+    if (!loadedSections.has(sectionId)) {
+        try {
+            const res = await fetch(`/sections/${sectionId}.html`);
+            if (!res.ok) throw new Error(`Failed to load section: ${sectionId}`);
+            const html = await res.text();
+
+            // Section files are full standalone pages — extract just the <section> element
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const sectionEl = doc.getElementById(sectionId);
+            if (sectionEl) {
+                document.getElementById('sections-container').appendChild(sectionEl);
+            } else {
+                document.getElementById('sections-container').insertAdjacentHTML('beforeend', html);
+            }
+
+            loadedSections.add(sectionId);
+            _initSection(sectionId);
+            _setMonthDefaultsForSection();
+        } catch (err) {
+            console.error('Section load error:', err);
+            return;
+        }
+    }
+
+    // Hide all sections, show the target
+    document.querySelectorAll('#sections-container .section').forEach(sec => sec.classList.remove('active'));
+    const target = document.getElementById(sectionId);
+    if (target) target.classList.add('active');
+
+    // Call section-specific data loads
     if (sectionId === 'dashboard') loadDashboard();
     else if (sectionId === 'employees') loadEmployees();
     else if (sectionId === 'attendance') loadAttendance();
@@ -166,6 +227,176 @@ function showSection(sectionId) {
     else if (sectionId === 'uploads') loadUploadsPage();
     else if (sectionId === 'attPhotos') loadAttendancePhotos();
     else if (sectionId === 'settings') loadSettingsForm();
+}
+
+// Register form event listeners after a section's HTML has been injected
+function _initSection(sectionId) {
+    if (sectionId === 'settings') {
+        const settingsForm = document.getElementById('settings-form');
+        if (settingsForm && !settingsForm._listenerAdded) {
+            settingsForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const newSettings = {
+                    standardHours: parseFloat(document.getElementById('set-standard-hours').value),
+                    slabHours: parseFloat(document.getElementById('set-slab-hours').value)
+                };
+                await fetch(`${API_URL}/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newSettings)
+                });
+                globalSettings = newSettings;
+                alert('Settings Saved! All calculations updated.');
+            });
+            settingsForm._listenerAdded = true;
+        }
+    }
+
+    if (sectionId === 'employees') {
+        const empForm = document.getElementById('employee-form');
+        if (empForm && !empForm._listenerAdded) {
+            empForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('emp-id').value;
+                const name = document.getElementById('emp-name').value.toUpperCase();
+                const contact = document.getElementById('emp-contact').value;
+                const salary = document.getElementById('emp-salary').value;
+                const customId = document.getElementById('emp-custom-id').value;
+                const designation = document.getElementById('emp-designation').value;
+                const password = document.getElementById('emp-password').value || '123456';
+                const payload = { name, contact, salary, customId, designation, password };
+                if (id) {
+                    await fetch(`${API_URL}/employees/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    alert('Employee Updated!');
+                } else {
+                    await fetch(`${API_URL}/employees`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    alert('Employee Added!');
+                }
+                resetEmployeeForm();
+                loadEmployees();
+            });
+            empForm._listenerAdded = true;
+        }
+    }
+
+    if (sectionId === 'attendance') {
+        // Change listeners for live preview
+        ['att-time-in', 'att-time-out', 'att-slab-mode', 'att-sunday-mode', 'att-employee'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el && !el._listenerAdded) {
+                el.addEventListener('change', calculatePreview);
+                el._listenerAdded = true;
+            }
+        });
+        const attForm = document.getElementById('attendance-form');
+        if (attForm && !attForm._listenerAdded) {
+            attForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const workedHours = calculatePreview();
+                const id = document.getElementById('att-id').value;
+                const date = document.getElementById('att-date').value;
+                const employeeId = document.getElementById('att-employee').value;
+                if (!id) {
+                    const isDuplicate = attendanceData.some(a => a.employeeId == employeeId && a.date === date);
+                    if (isDuplicate) {
+                        alert(`Attendance already marked for this employee on ${date}.`);
+                        return;
+                    }
+                }
+                const data = {
+                    date: date,
+                    employeeId: employeeId,
+                    employeeName: document.getElementById('att-employee').selectedOptions[0].text,
+                    slabMode: document.getElementById('att-slab-mode').checked,
+                    sundayMode: document.getElementById('att-sunday-mode').checked,
+                    timeIn: document.getElementById('att-time-in').value,
+                    timeOut: document.getElementById('att-time-out').value,
+                    fare: document.getElementById('att-fare').value,
+                    workedHours: workedHours
+                };
+                const submitBtn = document.getElementById('att-submit-btn');
+                const originalText = submitBtn.innerText;
+                const originalBg = submitBtn.style.background;
+                submitBtn.innerText = 'Saving...';
+                submitBtn.disabled = true;
+                try {
+                    if (id) {
+                        await fetch(`${API_URL}/attendance/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+                        submitBtn.innerText = 'Updated ✓';
+                        submitBtn.style.background = '#10b981';
+                        setTimeout(() => { resetAttendanceForm(true); }, 800);
+                    } else {
+                        await fetch(`${API_URL}/attendance`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+                        submitBtn.innerText = 'Marked ✓';
+                        submitBtn.style.background = '#10b981';
+                        setTimeout(() => {
+                            resetAttendanceForm(false);
+                            submitBtn.innerText = originalText;
+                            submitBtn.style.background = originalBg;
+                            submitBtn.disabled = false;
+                        }, 800);
+                    }
+                    loadAttendanceTable();
+                    loadDashboard();
+                } catch (error) {
+                    console.error('Error saving attendance:', error);
+                    alert('Failed to save attendance.');
+                    submitBtn.innerText = originalText;
+                    submitBtn.style.background = originalBg;
+                    submitBtn.disabled = false;
+                }
+            });
+            attForm._listenerAdded = true;
+        }
+    }
+
+    if (sectionId === 'advance') {
+        const advForm = document.getElementById('advance-form');
+        if (advForm && !advForm._listenerAdded) {
+            advForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('adv-id').value;
+                const formData = new FormData();
+                formData.append('employeeId', document.getElementById('adv-employee').value);
+                formData.append('amount', document.getElementById('adv-amount').value);
+                formData.append('date', document.getElementById('adv-date').value);
+                formData.append('deductionMonth', document.getElementById('adv-deduction-month').value);
+                formData.append('mode', document.getElementById('adv-mode').value);
+                formData.append('notes', document.getElementById('adv-notes').value);
+                const fileInput = document.getElementById('adv-screenshot');
+                if (fileInput.files[0]) {
+                    const compressed = await compressImage(fileInput.files[0]);
+                    formData.append('screenshot', compressed);
+                }
+                if (id) {
+                    await fetch(`${API_URL}/advances/${id}`, { method: 'PUT', body: formData });
+                    alert('Advance Updated!');
+                } else {
+                    await fetch(`${API_URL}/advances`, { method: 'POST', body: formData });
+                    alert('Advance Saved!');
+                }
+                resetAdvanceForm();
+                loadAdvanceTable();
+            });
+            advForm._listenerAdded = true;
+        }
+    }
 }
 
 function toggleSidebar() {
@@ -217,20 +448,7 @@ function loadSettingsForm() {
     fetchDatabaseUsage();
 }
 
-document.getElementById('settings-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const newSettings = {
-        standardHours: parseFloat(document.getElementById('set-standard-hours').value),
-        slabHours: parseFloat(document.getElementById('set-slab-hours').value)
-    };
-    await fetch(`${API_URL}/settings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSettings)
-    });
-    globalSettings = newSettings;
-    alert('Settings Saved! All calculations updated.');
-});
+// settings-form listener is registered dynamically in _initSection('settings')
 
 async function resetSettings() {
     if (!confirm('Reset to defaults (8.5h / 6h)?')) return;
@@ -722,8 +940,10 @@ async function loadDashboard() {
     renderEmployeeCards();
 
     // 4. Populate Quick Settings inputs
-    document.getElementById('quick-std-hours').value = globalSettings.standardHours;
-    document.getElementById('quick-slab-hours').value = globalSettings.slabHours;
+    const qStd = document.getElementById('quick-std-hours');
+    const qSlab = document.getElementById('quick-slab-hours');
+    if (qStd) qStd.value = globalSettings.standardHours;
+    if (qSlab) qSlab.value = globalSettings.slabHours;
 }
 
 async function saveQuickSettings() {
@@ -1634,36 +1854,7 @@ async function deleteEmployee(id, name) {
     }
 }
 
-document.getElementById('employee-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('emp-id').value;
-    const name = document.getElementById('emp-name').value.toUpperCase();
-    const contact = document.getElementById('emp-contact').value;
-    const salary = document.getElementById('emp-salary').value;
-    const customId = document.getElementById('emp-custom-id').value;
-    const designation = document.getElementById('emp-designation').value;
-    const password = document.getElementById('emp-password').value || '123456';
-
-    const payload = { name, contact, salary, customId, designation, password };
-
-    if (id) {
-        await fetch(`${API_URL}/employees/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        alert('Employee Updated!');
-    } else {
-        await fetch(`${API_URL}/employees`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        alert('Employee Added!');
-    }
-    resetEmployeeForm();
-    loadEmployees();
-});
+// employee-form listener is registered dynamically in _initSection('employees')
 
 // --- ATTENDANCE ---
 async function loadAttendanceForm() {
@@ -2011,84 +2202,7 @@ function calculatePreview() {
     return workedHours.toFixed(2);
 }
 
-['att-time-in', 'att-time-out', 'att-slab-mode', 'att-sunday-mode', 'att-employee'].forEach(id => {
-    document.getElementById(id).addEventListener('change', calculatePreview);
-});
-
-document.getElementById('attendance-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const workedHours = calculatePreview();
-    const id = document.getElementById('att-id').value;
-    const date = document.getElementById('att-date').value;
-    const employeeId = document.getElementById('att-employee').value;
-
-    // Duplicate Check (only for new entries)
-    if (!id) {
-        const isDuplicate = attendanceData.some(a => a.employeeId == employeeId && a.date === date);
-        if (isDuplicate) {
-            alert(`Attendance already marked for this employee on ${date}.`);
-            return;
-        }
-    }
-
-    const data = {
-        date: date,
-        employeeId: employeeId,
-        employeeName: document.getElementById('att-employee').selectedOptions[0].text,
-        slabMode: document.getElementById('att-slab-mode').checked,
-        sundayMode: document.getElementById('att-sunday-mode').checked,
-        timeIn: document.getElementById('att-time-in').value,
-        timeOut: document.getElementById('att-time-out').value,
-        fare: document.getElementById('att-fare').value,
-        workedHours: workedHours
-    };
-
-    const submitBtn = document.getElementById('att-submit-btn');
-    const originalText = submitBtn.innerText;
-    const originalBg = submitBtn.style.background;
-
-    submitBtn.innerText = 'Saving...';
-    submitBtn.disabled = true;
-
-    try {
-        if (id) {
-            await fetch(`${API_URL}/attendance/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            submitBtn.innerText = 'Updated ✓';
-            submitBtn.style.background = '#10b981'; // green
-            setTimeout(() => {
-                resetAttendanceForm(true); // Full reset after edit
-            }, 800);
-        } else {
-            await fetch(`${API_URL}/attendance`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            submitBtn.innerText = 'Marked ✓';
-            submitBtn.style.background = '#10b981'; // green
-            setTimeout(() => {
-                resetAttendanceForm(false); // Partial reset for fast entry
-                submitBtn.innerText = originalText;
-                submitBtn.style.background = originalBg;
-                submitBtn.disabled = false;
-            }, 800);
-        }
-
-        loadAttendanceTable();
-        loadDashboard();
-
-    } catch (error) {
-        console.error("Error saving attendance:", error);
-        alert("Failed to save attendance.");
-        submitBtn.innerText = originalText;
-        submitBtn.style.background = originalBg;
-        submitBtn.disabled = false;
-    }
-});
+// attendance-form + change listeners registered dynamically in _initSection('attendance')
 
 // --- ADVANCES ---
 async function loadAdvanceForm() {
@@ -2231,39 +2345,7 @@ async function deleteAdvance(id) {
     loadDashboard();
 }
 
-document.getElementById('advance-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('adv-id').value;
-    const formData = new FormData();
-    formData.append('employeeId', document.getElementById('adv-employee').value);
-    formData.append('amount', document.getElementById('adv-amount').value);
-    formData.append('date', document.getElementById('adv-date').value);
-    formData.append('deductionMonth', document.getElementById('adv-deduction-month').value);
-    formData.append('mode', document.getElementById('adv-mode').value);
-    formData.append('notes', document.getElementById('adv-notes').value);
-
-    const fileInput = document.getElementById('adv-screenshot');
-    if (fileInput.files[0]) {
-        const compressed = await compressImage(fileInput.files[0]);
-        formData.append('screenshot', compressed);
-    }
-
-    if (id) {
-        await fetch(`${API_URL}/advances/${id}`, {
-            method: 'PUT',
-            body: formData
-        });
-        alert('Advance Updated!');
-    } else {
-        await fetch(`${API_URL}/advances`, {
-            method: 'POST',
-            body: formData
-        });
-        alert('Advance Saved!');
-    }
-    resetAdvanceForm();
-    loadAdvanceTable();
-});
+// advance-form listener registered dynamically in _initSection('advance')
 
 // --- PAYROLL ---
 // --- PAYROLL ---
@@ -2397,7 +2479,10 @@ async function loadPayroll() {
 function openPaymentModal(empId, dueAmount) {
     document.getElementById('pay-emp-id').value = empId;
     document.getElementById('pay-amount').value = dueAmount;
-    document.getElementById('pay-salary-month').value = document.getElementById('payroll-month').value;
+    const payrollMonthEl = document.getElementById('payroll-month');
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    document.getElementById('pay-salary-month').value = payrollMonthEl ? payrollMonthEl.value || currentMonth : currentMonth;
     document.getElementById('pay-date').valueAsDate = new Date();
     document.getElementById('payment-modal').style.display = 'flex';
 }
@@ -2407,36 +2492,39 @@ function closePaymentModal() {
     document.getElementById('payment-form').reset();
 }
 
-document.getElementById('payment-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
+const _paymentFormEl = document.getElementById('payment-form');
+if (_paymentFormEl && !_paymentFormEl._listenerAdded) {
+    _paymentFormEl._listenerAdded = true;
+    _paymentFormEl.addEventListener('submit', async (e) => {
+        e.preventDefault();
 
-    const formData = new FormData();
-    formData.append('employeeId', document.getElementById('pay-emp-id').value);
-    formData.append('salaryMonth', document.getElementById('pay-salary-month').value);
-    formData.append('amount', document.getElementById('pay-amount').value);
-    formData.append('date', document.getElementById('pay-date').value);
-    formData.append('mode', document.getElementById('pay-mode').value);
-    formData.append('notes', document.getElementById('pay-notes').value);
+        const formData = new FormData();
+        formData.append('employeeId', document.getElementById('pay-emp-id').value);
+        formData.append('salaryMonth', document.getElementById('pay-salary-month').value);
+        formData.append('amount', document.getElementById('pay-amount').value);
+        formData.append('date', document.getElementById('pay-date').value);
+        formData.append('mode', document.getElementById('pay-mode').value);
+        formData.append('notes', document.getElementById('pay-notes').value);
 
-    const fileInput = document.getElementById('pay-screenshot');
-    if (fileInput.files[0]) {
-        const compressed = await compressImage(fileInput.files[0]);
-        formData.append('screenshot', compressed);
-    }
+        const fileInput = document.getElementById('pay-screenshot');
+        if (fileInput.files[0]) {
+            const compressed = await compressImage(fileInput.files[0]);
+            formData.append('screenshot', compressed);
+        }
 
-    try {
-        await fetch(`${API_URL}/payments`, {
-            method: 'POST',
-            body: formData
-            // Content-Type header is auto-set with FormData (multipart/form-data)
-        });
-        alert('Payment Recorded!');
-        closePaymentModal();
-        loadPayroll(); // Refresh cards
-    } catch (e) {
-        alert('Error saving payment');
-    }
-});
+        try {
+            await fetch(`${API_URL}/payments`, {
+                method: 'POST',
+                body: formData
+            });
+            alert('Payment Recorded!');
+            closePaymentModal();
+            loadPayroll();
+        } catch (e) {
+            alert('Error saving payment');
+        }
+    });
+}
 
 // --- EDIT PAYMENT ---
 async function openEditPaymentModal(paymentId) {
@@ -2476,69 +2564,56 @@ async function deletePaymentRecord(paymentId) {
     }
 }
 
-document.getElementById('edit-payment-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('edit-pay-id').value;
-    const formData = new FormData();
-    formData.append('amount', document.getElementById('edit-pay-amount').value);
-    formData.append('date', document.getElementById('edit-pay-date').value);
-    formData.append('mode', document.getElementById('edit-pay-mode').value);
-    formData.append('notes', document.getElementById('edit-pay-notes').value);
+const _editPayFormEl = document.getElementById('edit-payment-form');
+if (_editPayFormEl && !_editPayFormEl._listenerAdded) {
+    _editPayFormEl._listenerAdded = true;
+    _editPayFormEl.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('edit-pay-id').value;
+        const formData = new FormData();
+        formData.append('amount', document.getElementById('edit-pay-amount').value);
+        formData.append('date', document.getElementById('edit-pay-date').value);
+        formData.append('mode', document.getElementById('edit-pay-mode').value);
+        formData.append('notes', document.getElementById('edit-pay-notes').value);
 
-    const fileInput = document.getElementById('edit-pay-screenshot');
-    if (fileInput.files[0]) {
-        const compressed = await compressImage(fileInput.files[0]);
-        formData.append('screenshot', compressed);
-    }
-
-    try {
-        const res = await fetch(`${API_URL}/payments/${id}`, {
-            method: 'PUT',
-            body: formData
-        });
-        if (!res.ok) throw new Error('Update failed');
-        alert('Payment updated!');
-        closeEditPaymentModal();
-        loadPayroll();
-    } catch (e) {
-        alert('Error updating payment: ' + e.message);
-    }
-});
-
-// ==================== AUTO DEFAULT CURRENT MONTH ====================
-function setDefaultMonthFilters() {
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
-    // Select all month inputs on the page
-    document.querySelectorAll('input[type="month"]').forEach(input => {
-        // Only set if empty or if it's the specific dashboard/payroll filters
-        if (!input.value) {
-            input.value = currentMonth;
+        const fileInput = document.getElementById('edit-pay-screenshot');
+        if (fileInput.files[0]) {
+            const compressed = await compressImage(fileInput.files[0]);
+            formData.append('screenshot', compressed);
         }
-    });
 
-    // Specific IDs that MUST have a value for initial load to work correctly
-    const criticalFilters = [
-        'dashboard-month-filter',
-        'att-filter-month',
-        'adv-filter-month',
-        'payroll-month',
-        'uploads-filter-month'
-    ];
-
-    criticalFilters.forEach(id => {
-        const el = document.getElementById(id);
-        if (el && !el.value) {
-            el.value = currentMonth;
+        try {
+            const res = await fetch(`${API_URL}/payments/${id}`, {
+                method: 'PUT',
+                body: formData
+            });
+            if (!res.ok) throw new Error('Update failed');
+            alert('Payment updated!');
+            closeEditPaymentModal();
+            loadPayroll();
+        } catch (e) {
+            alert('Error updating payment: ' + e.message);
         }
     });
 }
 
-// Initialize on DOM Load
-document.addEventListener('DOMContentLoaded', () => {
-    setDefaultMonthFilters();
-});
+// ==================== AUTO DEFAULT CURRENT MONTH ====================
+// Sets month defaults for all currently-present month inputs
+function setDefaultMonthFilters() {
+    _setMonthDefaultsForSection();
+}
+
+function _setMonthDefaultsForSection() {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    // Set default on any visible month input that has no value
+    document.querySelectorAll('input[type="month"]').forEach(input => {
+        if (!input.value) {
+            input.value = currentMonth;
+        }
+    });
+}
 
 // Initialize
 init();

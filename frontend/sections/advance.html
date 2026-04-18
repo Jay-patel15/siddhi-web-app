@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Advance Payments | Siddhi Electricals</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="icon" type="image/png" href="../assets/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        (function () {
+            const s = localStorage.getItem('payroll_session');
+            if (!s) { window.location.href = '/login.html'; return; }
+            try { const d = JSON.parse(s); if (d.role === 'employee') window.location.replace('/employee-portal.html'); } catch(e) {}
+        })();
+    </script>
+</head>
+<body data-page="advance">
+
+    <div class="overlay" onclick="toggleSidebar()"></div>
+
+    <nav class="sidebar" id="sidebar">
+        <div class="brand" style="display:flex;align-items:center;gap:12px;margin-bottom:2.5rem;">
+            <div style="width:55px;height:55px;overflow:hidden;display:flex;align-items:center;flex-shrink:0;">
+                <img src="../assets/logo-horizontal.png" alt="Icon" style="height:55px;width:auto;max-width:none;">
+            </div>
+            <div style="display:flex;flex-direction:column;line-height:1.15;">
+                <span style="color:var(--primary);font-size:1.5rem;font-weight:800;">Siddhi</span>
+                <span style="color:var(--primary);font-size:1.5rem;font-weight:800;">Electricals</span>
+            </div>
+        </div>
+        <ul class="nav-links">
+            <li class="nav-item" data-section="dashboard"  onclick="location.href='/sections/dashboard.html'">🏠 Dashboard</li>
+            <li class="nav-item" data-section="employees"  onclick="location.href='/sections/employees.html'">👥 Employees</li>
+            <li class="nav-item" data-section="attendance" onclick="location.href='/sections/attendance.html'">🕒 Attendance</li>
+            <li class="nav-item" data-section="advance"    onclick="location.href='/sections/advance.html'">💲 Advance Payments</li>
+            <li class="nav-item" data-section="payroll"    onclick="location.href='/sections/payroll.html'">📄 Payroll</li>
+            <li class="nav-item" data-section="uploads"    onclick="location.href='/sections/uploads.html'">📷 Uploads</li>
+            <li class="nav-item" data-section="attPhotos"  onclick="location.href='/sections/attPhotos.html'">📸 Att. Photos</li>
+        </ul>
+        <div class="nav-settings">
+            <li class="nav-item" data-section="settings"   onclick="location.href='/sections/settings.html'">⚙️ Settings</li>
+            <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn">
+                <span class="toggle-icon">🌙</span> <span id="dark-mode-label">Dark Mode</span>
+            </button>
+            <li class="nav-item" style="color:var(--danger)" onclick="logout()">🚪 Logout</li>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <header style="display:flex;align-items:center;gap:1rem;">
+            <button class="hamburger-btn" onclick="toggleSidebar()" style="display:none;background:none;border:none;font-size:1.5rem;cursor:pointer;padding:0.5rem;">☰</button>
+        </header>
+        <div id="sections-container">
+            <section id="advance" class="section active">
+
+                <div class="card">
+                    <h3>Record Advance Payment</h3>
+                    <form id="advance-form">
+                        <input type="hidden" id="adv-id">
+                        <div class="form-group"><label>Employee</label><select id="adv-employee" required><option value="">Select Employee</option></select></div>
+                        <div class="form-group"><label>Amount (₹)</label><input type="number" id="adv-amount" required></div>
+                        <div class="form-group"><label>Date</label><input type="date" id="adv-date" required></div>
+                        <div class="form-group" style="background:#fff1f2;padding:10px;border-radius:6px;border:1px dashed #fecdd3;">
+                            <label style="color:#be123c;font-weight:bold;">Deduct from Salary of (Month)</label>
+                            <input type="month" id="adv-deduction-month" required style="border:2px solid #fecdd3;">
+                            <small style="display:block;margin-top:4px;color:var(--primary);font-weight:500;">Select the month you want this to be deducted from.</small>
+                        </div>
+                        <div class="form-group"><label>Payment Mode</label>
+                            <select id="adv-mode"><option value="Cash">Cash</option><option value="Online">Online/UPI</option><option value="Check">Check</option></select>
+                        </div>
+                        <div class="form-group"><label>Screenshot Proof <span style="color:#ef4444;">*</span></label><input type="file" id="adv-screenshot" accept="image/*" required><small style="color:#ef4444;">* Proof is required to save the advance.</small></div>
+                        <div class="form-group"><label>Notes</label><input type="text" id="adv-notes"></div>
+                        <button type="submit" class="btn btn-primary" id="adv-submit-btn">Save Payment</button>
+                        <button type="button" class="btn" id="adv-cancel-btn" style="display:none;background:var(--gray);color:white;" onclick="resetAdvanceForm()">Cancel</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
+                        <h3>Advance History</h3>
+                        <div class="filter-group" style="flex-wrap:wrap;">
+                            <div class="filter-item">
+                                <label for="adv-filter-month" class="filter-label">Filter by Month:</label>
+                                <input type="month" id="adv-filter-month" onchange="loadAdvanceTable()" class="filter-input">
+                            </div>
+                            <div class="filter-item">
+                                <label for="adv-filter-employee" class="filter-label">Employee:</label>
+                                <select id="adv-filter-employee" onchange="loadAdvanceTable()" class="filter-input"><option value="">All Employees</option></select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Date</th><th>Employee</th><th>Amount</th><th>Deduct Month</th><th>Mode</th><th>Notes</th><th>Proof</th><th>Action</th></tr></thead>
+                            <tbody id="advance-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </section>
+        </div>
+    </main>
+
+    <div id="image-preview-overlay" class="image-preview-overlay" onclick="closeImagePreview(event)">
+        <div onclick="event.stopPropagation()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:0.75rem 1rem;flex-shrink:0;gap:0.5rem;">
+            <span id="preview-counter" style="color:white;font-size:0.9rem;font-weight:600;">1/1</span>
+            <button onclick="downloadCurrentImage()" style="background:var(--primary);color:white;border:none;padding:0.45rem 1.2rem;border-radius:20px;font-size:0.85rem;cursor:pointer;font-weight:600;">⬇ Download</button>
+            <button onclick="closeImagePreview()" style="background:rgba(255,255,255,0.15);color:white;border:none;width:36px;height:36px;border-radius:50%;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+        </div>
+        <div onclick="event.stopPropagation()" style="flex:1;width:100%;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;padding:0 3.5rem;">
+            <button id="preview-prev" onclick="prevImage()" style="position:absolute;left:0.5rem;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;width:44px;height:44px;border-radius:50%;font-size:1.4rem;cursor:pointer;color:white;display:flex;align-items:center;justify-content:center;z-index:1;">◀</button>
+            <img id="preview-image" src="" alt="Preview" style="max-width:100%;max-height:75vh;object-fit:contain;border-radius:10px;">
+            <button id="preview-next" onclick="nextImage()" style="position:absolute;right:0.5rem;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;width:44px;height:44px;border-radius:50%;font-size:1.4rem;cursor:pointer;color:white;display:flex;align-items:center;justify-content:center;z-index:1;">▶</button>
+        </div>
+        <div class="image-preview-info" id="preview-info" onclick="event.stopPropagation()" style="width:100%;text-align:center;padding:0.75rem 1rem;color:white;font-size:0.95rem;font-weight:600;flex-shrink:0;background:rgba(0,0,0,0.4);"></div>
+    </div>
+
+    <script src="../js/app.js"></script>
+</body>
+</html>
