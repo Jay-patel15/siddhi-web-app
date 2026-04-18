@@ -28,8 +28,9 @@ app.use(express.static(path.join(__dirname, 'frontend'), {
     }
 }));
 
-// Root `/` → redirect to login (session-based redirect happens client-side in login.html)
+// Root `/` and `/index.html` → redirect to login
 app.get('/', (req, res) => res.redirect(302, '/login.html'));
+app.get('/index.html', (req, res) => res.redirect(302, '/login.html'));
 
 // Redirect legacy section URLs → new sections folder
 const legacyPages = ['/dashboard.html', '/employees.html', '/attendance.html', '/advance.html', '/payroll.html', '/uploads.html', '/settings.html', '/attPhotos.html'];
