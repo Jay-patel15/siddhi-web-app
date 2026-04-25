@@ -876,10 +876,11 @@ async function loadDashboard() {
     const monthlyAttByEmp = new Map();
     attendanceData.forEach(a => {
         if (a.date.startsWith(currentMonth)) {
-            if (!monthlyAttByEmp.has(a.employeeId)) {
-                monthlyAttByEmp.set(a.employeeId, []);
+            const empKey = String(a.employeeId);
+            if (!monthlyAttByEmp.has(empKey)) {
+                monthlyAttByEmp.set(empKey, []);
             }
-            monthlyAttByEmp.get(a.employeeId).push(a);
+            monthlyAttByEmp.get(empKey).push(a);
         }
     });
 
@@ -893,7 +894,9 @@ async function loadDashboard() {
 
             const sal = parseFloat(emp.salary);
             const hourly = sal / globalSettings.standardHours;
-            if (att.slabMode && wh > globalSettings.standardHours) {
+            if (att.sundayMode) {
+                empEarned += sal;
+            } else if (att.slabMode && wh > globalSettings.standardHours) {
                 const slabRate = sal / globalSettings.slabHours;
                 empEarned += (hourly * globalSettings.standardHours) + (slabRate * (wh - globalSettings.standardHours));
             } else {
@@ -1201,7 +1204,11 @@ async function downloadPayslipPDF() {
             totalHours += wh;
             totalFare += parseFloat(a.fare || 0);
 
-            if (a.slabMode && wh > globalSettings.standardHours) {
+            if (a.sundayMode) {
+                // Sunday mode: full daily salary regardless of hours
+                basicPay += emp.salary;
+                totalNormalHours += wh;
+            } else if (a.slabMode && wh > globalSettings.standardHours) {
                 // Split: Normal Hours get Normal Rate, Extra Hours get Slab Rate
                 const normalPart = normalHourlyRate * globalSettings.standardHours;
                 const extraPart = slabHourlyRate * (wh - globalSettings.standardHours);
@@ -1623,7 +1630,13 @@ async function updateModalData() {
         let dayPay = 0;
         let otLabel = '';
 
-        if (a.slabMode && wh > globalSettings.standardHours) {
+        if (a.sundayMode) {
+            // Sunday mode: full daily salary
+            dayPay = sal;
+            totalNormalHours += wh;
+            totalBasePay += dayPay;
+            otLabel = ' <span style="color:#16a34a; font-weight:600; font-size:0.85em;">(S)</span>';
+        } else if (a.slabMode && wh > globalSettings.standardHours) {
             const normalPart = normalRate * globalSettings.standardHours;
             const extraPart = (sal / globalSettings.slabHours) * (wh - globalSettings.standardHours);
             dayPay = normalPart + extraPart;
@@ -2359,17 +2372,40 @@ async function loadPayroll() {
         document.getElementById('payroll-month').value = monthInput;
     }
 
-    const [res, payRes] = await Promise.all([
-        fetch(`${API_URL}/payroll?month=${monthInput}`),
-        fetch(`${API_URL}/payments`)
-    ]);
-    const payroll = await res.json();
-    paymentsData = await payRes.json();
-
     const grid = document.getElementById('payroll-grid');
+    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--gray); padding: 2rem;">⏳ Loading payroll...</div>';
+
+    let payroll, paymentsRaw;
+    try {
+        const [res, payRes] = await Promise.all([
+            fetch(`${API_URL}/payroll?month=${monthInput}`),
+            fetch(`${API_URL}/payments`)
+        ]);
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Server error: ${res.status}`);
+        }
+        if (!payRes.ok) {
+            throw new Error(`Failed to load payments: ${payRes.status}`);
+        }
+
+        payroll = await res.json();
+        paymentsRaw = await payRes.json();
+        paymentsData = Array.isArray(paymentsRaw) ? paymentsRaw : [];
+    } catch (err) {
+        console.error('loadPayroll error:', err);
+        grid.innerHTML = `<div style="grid-column:1/-1;background:#fee2e2;border:1px solid #fca5a5;border-radius:12px;padding:1.5rem;text-align:center;color:#b91c1c;">
+            <h4 style="margin:0 0 0.5rem">⚠️ Failed to Load Payroll</h4>
+            <p style="margin:0;font-size:0.9rem">${err.message}</p>
+            <button class="btn btn-primary" style="margin-top:1rem" onclick="loadPayroll()">🔄 Retry</button>
+        </div>`;
+        return;
+    }
+
     grid.innerHTML = '';
 
-    if (payroll.length === 0) {
+    if (!Array.isArray(payroll) || payroll.length === 0) {
         grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--gray); padding: 2rem; background: var(--white); border-radius: 12px; border: 1px solid #e2e8f0;">No salary records found for this selection.</div>';
         return;
     }
@@ -2498,6 +2534,10 @@ if (_paymentFormEl && !_paymentFormEl._listenerAdded) {
     _paymentFormEl.addEventListener('submit', async (e) => {
         e.preventDefault();
 
+        const submitBtn = _paymentFormEl.querySelector('[type="submit"]');
+        const origText = submitBtn ? submitBtn.innerText : '';
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = '⏳ Saving...'; }
+
         const formData = new FormData();
         formData.append('employeeId', document.getElementById('pay-emp-id').value);
         formData.append('salaryMonth', document.getElementById('pay-salary-month').value);
@@ -2513,15 +2553,26 @@ if (_paymentFormEl && !_paymentFormEl._listenerAdded) {
         }
 
         try {
-            await fetch(`${API_URL}/payments`, {
+            const res = await fetch(`${API_URL}/payments`, {
                 method: 'POST',
                 body: formData
             });
-            alert('Payment Recorded!');
+
+            if (!res.ok) {
+                // Server returned an error — parse it and show to user
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || `Server error ${res.status}`);
+            }
+
+            // ✅ Success — close modal and refresh payroll
             closePaymentModal();
-            loadPayroll();
-        } catch (e) {
-            alert('Error saving payment');
+            await loadPayroll();   // await so UI is guaranteed fresh before any further action
+            alert('✅ Payment Recorded Successfully!');
+        } catch (err) {
+            console.error('Payment save error:', err);
+            alert('❌ Error saving payment: ' + err.message + '\n\nPlease try again.');
+            // Do NOT close modal — let user retry
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = origText; }
         }
     });
 }
@@ -2570,6 +2621,11 @@ if (_editPayFormEl && !_editPayFormEl._listenerAdded) {
     _editPayFormEl.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('edit-pay-id').value;
+
+        const submitBtn = _editPayFormEl.querySelector('[type="submit"]');
+        const origText = submitBtn ? submitBtn.innerText : '';
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = '⏳ Updating...'; }
+
         const formData = new FormData();
         formData.append('amount', document.getElementById('edit-pay-amount').value);
         formData.append('date', document.getElementById('edit-pay-date').value);
@@ -2587,12 +2643,17 @@ if (_editPayFormEl && !_editPayFormEl._listenerAdded) {
                 method: 'PUT',
                 body: formData
             });
-            if (!res.ok) throw new Error('Update failed');
-            alert('Payment updated!');
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || `Server error ${res.status}`);
+            }
             closeEditPaymentModal();
-            loadPayroll();
-        } catch (e) {
-            alert('Error updating payment: ' + e.message);
+            await loadPayroll();  // await to guarantee UI is fresh
+            alert('✅ Payment updated successfully!');
+        } catch (err) {
+            console.error('Edit payment error:', err);
+            alert('❌ Error updating payment: ' + err.message);
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = origText; }
         }
     });
 }
