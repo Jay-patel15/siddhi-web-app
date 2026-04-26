@@ -904,11 +904,10 @@ async function loadDashboard() {
             }
             empEarned += (parseFloat(att.fare) || 0);
         });
-        totalPayroll += empEarned;
+        totalPayroll += Math.round(empEarned);
     });
 
     const totalAdvances = advancesData.filter(a => {
-        const advDate = new Date(a.date);
         const dedMonth = a.deductionMonth || a.date.substring(0, 7);
         return dedMonth === currentMonth;
     }).reduce((sum, a) => sum + a.amount, 0);
@@ -917,11 +916,55 @@ async function loadDashboard() {
         return p.salaryMonth === currentMonth;
     }).reduce((sum, p) => sum + p.amount, 0);
 
-    // Calculate Total Pending Dues (Monthly Net Payable)
-    // Formula: Total Payroll (Month) - Total Advances (Month) - Total Paid (Month)
-    let totalPendingDues = totalPayroll - totalAdvances - totalPaid;
+    // Calculate sum of all employees' previous carry-forward balances
+    // Same logic as backend payroll.js — past earnings - past deductions - past payments
+    let totalPreviousBalance = 0;
+    employeesData.forEach(emp => {
+        const pastAtt = attendanceData.filter(a =>
+            String(a.employeeId) === String(emp.id) && a.date < `${currentMonth}-01`
+        );
+        let pastEarnings = 0;
+        pastAtt.forEach(att => {
+            const wh = parseFloat(att.workedHours);
+            if (isNaN(wh)) return;
+            const sal = parseFloat(emp.salary);
+            const normalRate = sal / globalSettings.standardHours;
+            if (att.sundayMode) {
+                pastEarnings += sal;
+            } else if (att.slabMode && wh > globalSettings.standardHours) {
+                const slabRate = sal / globalSettings.slabHours;
+                pastEarnings += (normalRate * globalSettings.standardHours) + (slabRate * (wh - globalSettings.standardHours));
+            } else {
+                pastEarnings += normalRate * wh;
+            }
+            pastEarnings += (parseFloat(att.fare) || 0);
+        });
 
-    document.getElementById('dash-curr-payroll').innerText = '₹' + Math.round(totalPayroll).toLocaleString();
+        const pastAdv = advancesData.filter(a => {
+            if (String(a.employeeId) !== String(emp.id)) return false;
+            const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
+            return deduct < currentMonth;
+        });
+        const pastDeductions = pastAdv.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+
+        const pastPay = paymentsData.filter(p =>
+            String(p.employeeId) === String(emp.id) && p.salaryMonth < currentMonth
+        );
+        const pastPaymentsTotal = pastPay.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+        totalPreviousBalance += Math.round(pastEarnings - pastDeductions - pastPaymentsTotal);
+    });
+
+    // Formula: Total Payroll + Previous Balances (carry-forward) - Advances - Paid
+    let totalPendingDues = totalPayroll + totalPreviousBalance - totalAdvances - totalPaid;
+
+    // Show the calculation in the orange box: Total Payroll + Previous Balance = Total
+    const totalEarned = totalPayroll + totalPreviousBalance;
+    const formattedPayroll = Math.round(totalPayroll).toLocaleString();
+    const formattedPrev = Math.round(totalPreviousBalance).toLocaleString();
+    const formattedTotal = Math.round(totalEarned).toLocaleString();
+    
+    document.getElementById('dash-curr-payroll').innerHTML = `<span style="font-size: 1.1rem; opacity: 0.9;">₹${formattedPayroll} + ₹${formattedPrev}</span><br><b>= ₹${formattedTotal}</b>`;
 
     // Update Pending Dues Label to show Month
     const pendingLabel = document.getElementById('dash-pending-dues').previousElementSibling;
