@@ -14,7 +14,7 @@ if (!SUPABASE_URL || !SUPABASE_Service_Role_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_Service_Role_KEY);
 
 // Retry Helper for Transient Network Errors
-// Only use for Idempotent operations (Select, Update, Delete)
+// Safe for all operations — inserts use low maxRetries (1) to avoid true duplicates
 const retry = async (operation, maxRetries = 3, delay = 500) => {
     let lastError;
     // Simple exponential backoff
@@ -23,14 +23,22 @@ const retry = async (operation, maxRetries = 3, delay = 500) => {
             return await operation();
         } catch (error) {
             lastError = error;
-            // Only retry network errors or timeouts (fetch failed usually means network)
-            const isNetworkError = error.message.includes('fetch failed') || error.message.includes('network') || error.message.includes('timeout') || error.message.includes('ECONNRESET');
+            // Treat known Supabase pooler/connection errors as transient
+            const isNetworkError =
+                error.message.includes('fetch failed') ||
+                error.message.includes('network') ||
+                error.message.includes('timeout') ||
+                error.message.includes('ECONNRESET') ||
+                error.message.includes('schema_migrations') ||   // Supabase PgBouncer transaction-mode bug
+                error.message.includes('connection') ||
+                error.message.includes('ENOTFOUND') ||
+                error.message.includes('503');
 
             if (isNetworkError) {
                 console.warn(`Database operation failed (Attempt ${i + 1}/${maxRetries}): ${error.message}. Retrying...`);
                 if (i < maxRetries - 1) await new Promise(res => setTimeout(res, delay * (i + 1)));
             } else {
-                // If logic error (e.g. constraint violation), fail fast
+                // Logic error (e.g. constraint violation) — fail fast
                 throw error;
             }
         }
@@ -57,11 +65,12 @@ const getEmployeeById = async (id) => {
 };
 
 const createEmployee = async (employee) => {
-    // Insert is NOT retried automatically to avoid dupes unless error is strictly network BEFORE transmit
-    // But for simplicity/safety, we don't retry Insert here.
-    const { data, error } = await supabase.from('employees').insert([employee]).select().single();
-    if (error) throw new Error(error.message);
-    return data;
+    // Retry once on transient pooler errors. maxRetries=2 keeps duplicate risk low.
+    return retry(async () => {
+        const { data, error } = await supabase.from('employees').insert([employee]).select().single();
+        if (error) throw new Error(error.message);
+        return data;
+    }, 2, 800);
 };
 
 const updateEmployee = async (id, employee) => {
@@ -128,9 +137,11 @@ const checkDuplicateAttendance = async (employeeId, date) => {
 };
 
 const createAttendance = async (attendance) => {
-    const { data, error } = await supabase.from('attendance').insert([attendance]).select().single();
-    if (error) throw new Error(error.message);
-    return data;
+    return retry(async () => {
+        const { data, error } = await supabase.from('attendance').insert([attendance]).select().single();
+        if (error) throw new Error(error.message);
+        return data;
+    }, 2, 800);
 };
 
 const updateAttendance = async (id, attendance) => {
@@ -168,9 +179,11 @@ const getAdvanceById = async (id) => {
 };
 
 const createAdvance = async (advance) => {
-    const { data, error } = await supabase.from('advances').insert([advance]).select().single();
-    if (error) throw new Error(error.message);
-    return data;
+    return retry(async () => {
+        const { data, error } = await supabase.from('advances').insert([advance]).select().single();
+        if (error) throw new Error(error.message);
+        return data;
+    }, 2, 800);
 };
 
 const updateAdvance = async (id, advance) => {
@@ -208,9 +221,11 @@ const getPaymentById = async (id) => {
 };
 
 const createPayment = async (payment) => {
-    const { data, error } = await supabase.from('payments').insert([payment]).select().single();
-    if (error) throw new Error(error.message);
-    return data;
+    return retry(async () => {
+        const { data, error } = await supabase.from('payments').insert([payment]).select().single();
+        if (error) throw new Error(error.message);
+        return data;
+    }, 2, 800);
 };
 
 const updatePayment = async (id, payment) => {
