@@ -22,7 +22,8 @@ router.post('/', async (req, res) => {
             designation: req.body.designation || '',
             password: req.body.password || '123456',
             normalHours: req.body.normalHours || 8.5,
-            slabBaseHours: req.body.slabBaseHours || 6
+            slabBaseHours: req.body.slabBaseHours || 6,
+            employee_type: req.body.employee_type || 'daily_wage' // 'daily_wage' | 'fixed_salary'
         };
         const created = await dbService.createEmployee(newEmployee);
         res.json(created);

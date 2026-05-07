@@ -264,7 +264,9 @@ function _initSection(sectionId) {
                 const customId = document.getElementById('emp-custom-id').value;
                 const designation = document.getElementById('emp-designation').value;
                 const password = document.getElementById('emp-password').value || '123456';
-                const payload = { name, contact, salary, customId, designation, password };
+                const typeEl = document.getElementById('emp-type');
+                const employee_type = typeEl ? typeEl.value : 'daily_wage';
+                const payload = { name, contact, salary, customId, designation, password, employee_type };
                 if (id) {
                     await fetch(`${API_URL}/employees/${id}`, {
                         method: 'PUT',
@@ -1845,12 +1847,16 @@ async function loadEmployees() {
 
     employeesData.forEach(emp => {
         const tr = document.createElement('tr');
-        const hourly = (emp.salary / globalSettings.standardHours).toFixed(2);
+        const isFixed = emp.employee_type === 'fixed_salary';
+        const typeBadge = isFixed
+            ? '<span style="background:#4f46e5;color:white;font-size:0.72em;padding:2px 8px;border-radius:20px;font-weight:600;">&#128084; Supervisor</span>'
+            : '<span style="background:#10b981;color:white;font-size:0.72em;padding:2px 8px;border-radius:20px;font-weight:600;">&#128119; Worker</span>';
+        const salaryLabel = isFixed ? `₹${emp.salary}/mo` : `₹${emp.salary}/day`;
         tr.innerHTML = `
             <td data-label="Name">${emp.name}</td>
             <td data-label="Contact">${emp.contact}</td>
-            <td data-label="Salary">₹${emp.salary}</td>
-            <td data-label="Hourly Rate">₹${hourly}/hr</td>
+            <td data-label="Type">${typeBadge}</td>
+            <td data-label="Salary">${salaryLabel}</td>
             <td data-label="Actions">
                 <div class="action-buttons">
                     <button class="btn" style="background: var(--warning); color: white; padding: 0.25rem 0.5rem;" onclick="editEmployee('${emp.id}')">✏️</button>
@@ -1874,6 +1880,8 @@ function editEmployee(id) {
     document.getElementById('emp-custom-id').value = emp.customId || '';
     document.getElementById('emp-designation').value = emp.designation || '';
     document.getElementById('emp-password').value = emp.password || '123456';
+    const typeEl = document.getElementById('emp-type');
+    if (typeEl) typeEl.value = emp.employee_type || 'daily_wage';
 
     document.getElementById('emp-submit-btn').innerText = 'Update Employee';
     document.getElementById('emp-cancel-btn').style.display = 'inline-block';
@@ -1931,6 +1939,9 @@ async function loadAttendanceForm() {
     employees.sort((a, b) => a.name.localeCompare(b.name));
 
     employees.forEach(emp => {
+        // Skip fixed_salary supervisors — attendance is not tracked for them
+        if (emp.employee_type === 'fixed_salary') return;
+
         // Form Dropdown
         const opt = document.createElement('option');
         opt.value = emp.id;

@@ -67,7 +67,16 @@
                             <div><label>Designation</label><input type="text" id="emp-designation" placeholder="e.g. Electrician"></div>
                         </div>
                         <div class="form-group grid-2">
-                            <div><label>Daily Salary (8.5 Hours)</label><input type="number" id="emp-salary" required></div>
+                            <div>
+                                <label>Employee Type</label>
+                                <select id="emp-type" style="width:100%;padding:0.6rem;border:1px solid var(--gray);border-radius:6px;font-size:0.95rem;">
+                                    <option value="daily_wage">👷 Daily Wage Worker</option>
+                                    <option value="fixed_salary">👔 Fixed Salary Supervisor</option>
+                                </select>
+                            </div>
+                            <div><label>Salary (Daily for Worker / Monthly for Supervisor)</label><input type="number" id="emp-salary" required></div>
+                        </div>
+                        <div class="form-group grid-2">
                             <div><label>Employee Login Password</label><input type="text" id="emp-password" placeholder="Set password for employee" value="123456"></div>
                         </div>
                         <div class="form-actions">
@@ -83,7 +92,7 @@
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Name</th><th>Contact</th><th>Daily Salary</th><th>Hourly Rate</th><th>Actions</th>
+                                    <th>Name</th><th>Contact</th><th>Type</th><th>Salary</th><th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="employee-table-body"></tbody>

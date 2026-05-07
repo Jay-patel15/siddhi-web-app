@@ -2068,13 +2068,59 @@
                 }
 
                 // Update header
-                // document.getElementById('header-emp-name').innerText = currentEmployee.name; // Removed old header
-
-                // Update details header
                 updateHeaderDetails();
 
-                // Update attendance buttons
-                updateAttendanceButtons();
+                // Show/hide attendance section based on employee type
+                const isFixed = currentEmployee.employee_type === 'fixed_salary';
+                const attSection = document.getElementById('attendance-action-section');
+                const mobileNav = document.querySelector('.mobile-nav');
+
+                if (isFixed) {
+                    // SUPERVISOR: hide attendance check-in/out entirely
+                    if (attSection) attSection.style.display = 'none';
+
+                    // Replace attendance mobile nav tab with a note
+                    if (mobileNav) {
+                        mobileNav.innerHTML = `
+                            <div class="nav-item active" onclick="switchTab('advances')">Advances</div>
+                            <div class="nav-item" onclick="switchTab('payments')">Payments</div>
+                        `;
+                        // Make advances the default active tab
+                        const advSec = document.getElementById('section-advances');
+                        const attSec = document.getElementById('section-attendance');
+                        const paySec = document.getElementById('section-payments');
+                        if (attSec) { attSec.classList.remove('active'); attSec.style.display = 'none'; }
+                        if (advSec) { advSec.classList.add('active'); advSec.style.display = ''; }
+                    }
+
+                    // Hide attendance-based stat cards (days present/absent, hours)
+                    const hideStatIds = ['stat-present', 'stat-absent', 'stat-normal-hours', 'stat-ot-hours', 'stat-hours', 'stat-gross'];
+                    hideStatIds.forEach(sid => {
+                        const el = document.getElementById(sid);
+                        if (el) { const card = el.closest('.stat-card'); if (card) card.style.display = 'none'; }
+                    });
+
+                    // Show fixed salary banner inside the stats area
+                    const dashGrid = document.querySelector('.dashboard-grid');
+                    if (dashGrid && !document.getElementById('fixed-salary-banner')) {
+                        const banner = document.createElement('div');
+                        banner.id = 'fixed-salary-banner';
+                        banner.style.cssText = 'grid-column:1/-1;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;border-radius:10px;padding:1rem 1.5rem;display:flex;align-items:center;gap:1rem;';
+                        banner.innerHTML = '<span style="font-size:1.8rem">&#128084;</span><div><div style="font-weight:700;font-size:1rem;">Fixed Salary Supervisor</div><div style="font-size:0.85rem;opacity:0.85;margin-top:2px;">Attendance is not tracked. Salary is paid as a fixed monthly amount.</div></div>';
+                        dashGrid.insertBefore(banner, dashGrid.firstChild);
+                    }
+                } else {
+                    // DAILY WAGE: show attendance section normally
+                    if (attSection) attSection.style.display = '';
+                    if (mobileNav) mobileNav.innerHTML = `
+                        <div class="nav-item active" onclick="switchTab('attendance')">Attendance</div>
+                        <div class="nav-item" onclick="switchTab('advances')">Advances</div>
+                        <div class="nav-item" onclick="switchTab('payments')">Payments</div>
+                    `;
+                }
+
+                // Update attendance buttons (only relevant for daily_wage)
+                if (!isFixed) updateAttendanceButtons();
 
                 // Load month data
                 loadData();
@@ -2088,16 +2134,26 @@
         function updateHeaderDetails() {
             document.getElementById('details-emp-name').innerText = currentEmployee.name;
 
+            const isFixed = currentEmployee.employee_type === 'fixed_salary';
             const salary = currentEmployee.dailySalary || currentEmployee.salary;
             const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
             const hourlyRate = (parseFloat(salary) / stdHours).toFixed(2);
 
-            document.getElementById('details-emp-meta').innerHTML = `
-                ID: <strong>${currentEmployee.customId || currentEmployee.id}</strong> | 
-                Designation: <strong>${currentEmployee.designation || 'N/A'}</strong> | 
-                Daily Salary: <strong>₹${salary}</strong> | 
-                Hourly Rate: <strong>₹${hourlyRate}</strong>
-            `;
+            if (isFixed) {
+                document.getElementById('details-emp-meta').innerHTML = `
+                    ID: <strong>${currentEmployee.customId || currentEmployee.id}</strong> |
+                    Designation: <strong>${currentEmployee.designation || 'Supervisor'}</strong> |
+                    Monthly Salary: <strong>&#8377;${salary}</strong>
+                    <span style="background:#4f46e5;color:white;font-size:0.72em;padding:2px 10px;border-radius:20px;font-weight:600;margin-left:8px;">&#128084; Fixed Salary</span>
+                `;
+            } else {
+                document.getElementById('details-emp-meta').innerHTML = `
+                    ID: <strong>${currentEmployee.customId || currentEmployee.id}</strong> |
+                    Designation: <strong>${currentEmployee.designation || 'N/A'}</strong> |
+                    Daily Salary: <strong>&#8377;${salary}</strong> |
+                    Hourly Rate: <strong>&#8377;${hourlyRate}</strong>
+                `;
+            }
         }
 
         function loadData() {
@@ -2124,6 +2180,69 @@
                 p.employeeId === currentEmployee.id &&
                 (p.date.startsWith(month) || p.salaryMonth === month)
             );
+
+            // ======= FIXED SALARY SUPERVISOR PATH =======
+            if (currentEmployee.employee_type === 'fixed_salary') {
+                const monthlySalary = parseFloat(currentEmployee.salary) || 0;
+                const totalAdvancesFixed = myAdvances
+                    .filter(a => a.deductionMonth === month)
+                    .reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+                const totalPaymentsFixed = myPayments
+                    .filter(p => p.salaryMonth === month)
+                    .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+                // Past balance for supervisor (salary-based past months)
+                const pastPayFixed = allData.payments.filter(p => p.employeeId === currentEmployee.id && p.salaryMonth < month);
+                const pastPaidFixed = pastPayFixed.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+                const pastAdvFixed = allData.advances.filter(a => {
+                    if (a.employeeId !== currentEmployee.id) return false;
+                    const dedMonth = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
+                    return dedMonth < month;
+                });
+                const pastDeductionsFixed = pastAdvFixed.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+
+                // For supervisors, previous balance = (past salary months count * monthly salary) - past advances - past payments
+                // We use past payments and advances only — no attendance tracking
+                const pastBalance = Math.round(-pastDeductionsFixed - pastPaidFixed);
+
+                const netDue = Math.round(monthlySalary - totalAdvancesFixed - totalPaymentsFixed + pastBalance);
+
+                // Update "Net Payable" card for supervisor
+                const netCard = document.querySelector('.payable-card');
+                if (netCard) {
+                    const title = netCard.querySelector('.stat-title');
+                    if (title) title.innerHTML = 'Net Due (This Month)';
+                    const val = document.getElementById('stat-net');
+                    if (val) {
+                        if (netDue <= 0 && totalPaymentsFixed > 0) {
+                            val.innerHTML = '<span style="font-weight:bold;">SETTLED</span><div style="font-size:0.6em;opacity:0.8;">Advance: ₹' + Math.round(totalAdvancesFixed) + ' | Paid: ₹' + Math.round(totalPaymentsFixed) + '</div>';
+                        } else {
+                            val.innerHTML = '&#8377;' + netDue + '<div style="font-size:0.6em;opacity:0.8;margin-top:2px;">Salary: &#8377;' + Math.round(monthlySalary) + ' | Advance: &#8377;' + Math.round(totalAdvancesFixed) + ' | Paid: &#8377;' + Math.round(totalPaymentsFixed) + '</div>';
+                        }
+                    }
+                    netCard.style.display = '';
+                }
+
+                // Previous Balance
+                const prevEl = document.getElementById('stat-prev-bal');
+                const prevCard = document.getElementById('card-prev-bal');
+                if (prevEl && prevCard) {
+                    if (pastBalance === 0) {
+                        prevEl.innerHTML = '<span style="color:inherit">-</span>';
+                        prevCard.className = 'stat-card prev-bal-neutral';
+                    } else {
+                        prevEl.innerHTML = `<span>${pastBalance > 0 ? '+' : ''}&#8377;${pastBalance}</span>`;
+                        prevCard.className = `stat-card ${pastBalance < 0 ? 'prev-bal-neg' : 'prev-bal-pos'}`;
+                    }
+                    prevCard.style.display = '';
+                }
+
+                // Update tables (advances + payments only)
+                updateAdvancesTable(myAdvances);
+                updatePaymentsTable(myPayments);
+                return; // Skip all daily-wage logic below
+            }
+            // ======= END FIXED SALARY PATH =======
 
             // Calculate stats
             const daysPresent = myAttendance.length;
@@ -2290,6 +2409,7 @@
             updateAdvancesTable(myAdvances);
             updatePaymentsTable(myPayments);
         }
+
 
         function calculateDayEarning(att) {
             const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
