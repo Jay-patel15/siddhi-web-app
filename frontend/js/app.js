@@ -1591,13 +1591,17 @@ function openEmployeeModal(empId) {
     document.getElementById('modal-emp-name').innerText = currentModalEmployee.name;
 
     // Populate Details
+    const isSupervisorModal = currentModalEmployee.employee_type === 'fixed_salary';
     const hourly = (currentModalEmployee.salary / globalSettings.standardHours).toFixed(2);
-    document.getElementById('modal-emp-details').innerHTML = `
-        ID: <strong>${currentModalEmployee.customId || '-'}</strong> &nbsp;|&nbsp; 
-        Designation: <strong>${currentModalEmployee.designation || 'Worker'}</strong> &nbsp;|&nbsp; 
-        Daily Salary: <strong>₹${currentModalEmployee.salary}</strong> &nbsp;|&nbsp; 
-        Hourly Rate: <strong>₹${hourly}</strong>
-    `;
+    document.getElementById('modal-emp-details').innerHTML = isSupervisorModal
+        ? `ID: <strong>${currentModalEmployee.customId || '-'}</strong> &nbsp;|&nbsp;
+           Designation: <strong>${currentModalEmployee.designation || 'Supervisor'}</strong> &nbsp;|&nbsp;
+           <span style="background:#4f46e5;color:white;font-size:0.8em;padding:2px 8px;border-radius:20px;font-weight:600;">&#128084; Fixed Salary Supervisor</span> &nbsp;|&nbsp;
+           Monthly Salary: <strong style="color:#4f46e5;">₹${currentModalEmployee.salary}</strong>`
+        : `ID: <strong>${currentModalEmployee.customId || '-'}</strong> &nbsp;|&nbsp;
+           Designation: <strong>${currentModalEmployee.designation || 'Worker'}</strong> &nbsp;|&nbsp;
+           Daily Salary: <strong>₹${currentModalEmployee.salary}</strong> &nbsp;|&nbsp;
+           Hourly Rate: <strong>₹${hourly}</strong>`;
 
     // Default to current month
     const now = new Date();
@@ -1646,6 +1650,7 @@ async function updateModalData() {
     const payments = allPayments.filter(p => p.employeeId === emp.id && p.salaryMonth === month);
 
     // Calculate Stats
+    const isSupervisorUpdate = emp.employee_type === 'fixed_salary';
     const year = parseInt(month.split('-')[0]);
     const mon = parseInt(month.split('-')[1]);
     const daysInMonth = new Date(year, mon, 0).getDate();
@@ -1667,50 +1672,78 @@ async function updateModalData() {
     const attBody = document.getElementById('modal-att-body');
     attBody.innerHTML = '';
 
-    // Sort Attendance by Date
-    att.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(a => {
-        const wh = parseFloat(a.workedHours);
-        const sal = parseFloat(emp.salary);
-        const normalRate = sal / globalSettings.standardHours;
-        let dayPay = 0;
-        let otLabel = '';
+    if (isSupervisorUpdate) {
+        // Supervisor: fixed monthly salary, no attendance tracking
+        earned = parseFloat(emp.salary);
+        totalBasePay = earned;
+        // Show a placeholder row in attendance table
+        attBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#4f46e5;padding:1rem;font-weight:600;">&#128084; Fixed Salary Supervisor — Attendance not tracked. Monthly Salary: ₹${emp.salary}</td></tr>`;
 
-        if (a.sundayMode) {
-            // Sunday mode: full daily salary
-            dayPay = sal;
-            totalNormalHours += wh;
-            totalBasePay += dayPay;
-            otLabel = ' <span style="color:#16a34a; font-weight:600; font-size:0.85em;">(S)</span>';
-        } else if (a.slabMode && wh > globalSettings.standardHours) {
-            const normalPart = normalRate * globalSettings.standardHours;
-            const extraPart = (sal / globalSettings.slabHours) * (wh - globalSettings.standardHours);
-            dayPay = normalPart + extraPart;
-            otLabel = ' <span style="color:#d97706; font-weight:600; font-size:0.85em;">(OT)</span>';
+        // Hide attendance-specific stat cards for supervisor
+        const presentCard = document.getElementById('modal-present');
+        const absentCard = document.getElementById('modal-absent');
+        const normalHoursCard = document.getElementById('modal-normal-hours');
+        const otHoursCard = document.getElementById('modal-ot-hours');
+        if (presentCard) presentCard.closest('.stat-card').style.display = 'none';
+        if (absentCard) absentCard.closest('.stat-card').style.display = 'none';
+        if (normalHoursCard) normalHoursCard.closest('.stat-card').style.display = 'none';
+        if (otHoursCard) otHoursCard.closest('.stat-card').style.display = 'none';
+    } else {
+        // Restore stat cards visibility (in case previously hidden)
+        const presentCard = document.getElementById('modal-present');
+        const absentCard = document.getElementById('modal-absent');
+        const normalHoursCard = document.getElementById('modal-normal-hours');
+        const otHoursCard = document.getElementById('modal-ot-hours');
+        if (presentCard) presentCard.closest('.stat-card').style.display = '';
+        if (absentCard) absentCard.closest('.stat-card').style.display = '';
+        if (normalHoursCard) normalHoursCard.closest('.stat-card').style.display = '';
+        if (otHoursCard) otHoursCard.closest('.stat-card').style.display = '';
 
-            totalNormalHours += globalSettings.standardHours;
-            totalOTHours += (wh - globalSettings.standardHours);
-            totalBasePay += normalPart;
-            totalOTPay += extraPart;
-        } else {
-            dayPay = normalRate * wh;
-            totalNormalHours += wh;
-            totalBasePay += dayPay;
-        }
+        // Sort Attendance by Date
+        att.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(a => {
+            const wh = parseFloat(a.workedHours);
+            const sal = parseFloat(emp.salary);
+            const normalRate = sal / globalSettings.standardHours;
+            let dayPay = 0;
+            let otLabel = '';
 
-        const fareAmt = parseFloat(a.fare) || 0;
-        totalFare += fareAmt;
-        earned += dayPay + fareAmt;
+            if (a.sundayMode) {
+                // Sunday mode: full daily salary
+                dayPay = sal;
+                totalNormalHours += wh;
+                totalBasePay += dayPay;
+                otLabel = ' <span style="color:#16a34a; font-weight:600; font-size:0.85em;">(S)</span>';
+            } else if (a.slabMode && wh > globalSettings.standardHours) {
+                const normalPart = normalRate * globalSettings.standardHours;
+                const extraPart = (sal / globalSettings.slabHours) * (wh - globalSettings.standardHours);
+                dayPay = normalPart + extraPart;
+                otLabel = ' <span style="color:#d97706; font-weight:600; font-size:0.85em;">(OT)</span>';
 
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td data-label="Date">${a.date} ${holidays.includes(a.date) ? '<span style="color:var(--danger)">(H)</span>' : ''}</td>
-            <td data-label="In">${formatTimeTo12h(a.timeIn)}</td>
-            <td data-label="Out">${formatTimeTo12h(a.timeOut)}</td>
-            <td data-label="Hours">${wh.toFixed(2)}${otLabel}</td>
-            <td data-label="Earned">₹${Math.round(dayPay)}</td>
-        `;
-        attBody.appendChild(tr);
-    });
+                totalNormalHours += globalSettings.standardHours;
+                totalOTHours += (wh - globalSettings.standardHours);
+                totalBasePay += normalPart;
+                totalOTPay += extraPart;
+            } else {
+                dayPay = normalRate * wh;
+                totalNormalHours += wh;
+                totalBasePay += dayPay;
+            }
+
+            const fareAmt = parseFloat(a.fare) || 0;
+            totalFare += fareAmt;
+            earned += dayPay + fareAmt;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td data-label="Date">${a.date} ${holidays.includes(a.date) ? '<span style="color:var(--danger)">(H)</span>' : ''}</td>
+                <td data-label="In">${formatTimeTo12h(a.timeIn)}</td>
+                <td data-label="Out">${formatTimeTo12h(a.timeOut)}</td>
+                <td data-label="Hours">${wh.toFixed(2)}${otLabel}</td>
+                <td data-label="Earned">₹${Math.round(dayPay)}</td>
+            `;
+            attBody.appendChild(tr);
+        });
+    }
 
     const totalAdv = adv.reduce((sum, a) => sum + a.amount, 0);
 
@@ -2289,15 +2322,17 @@ async function loadAdvanceForm() {
     employees.sort((a, b) => a.name.localeCompare(b.name));
 
     employees.forEach(emp => {
+        const isSupervisor = emp.employee_type === 'fixed_salary';
+        const salaryLabel = isSupervisor ? `₹${emp.salary}/mo` : `₹${emp.salary}/day`;
         const opt = document.createElement('option');
         opt.value = emp.id;
-        opt.textContent = emp.name;
+        opt.textContent = `${emp.name} (${salaryLabel})`;
         select.appendChild(opt);
 
         if (filterSelect) {
             const fOpt = document.createElement('option');
             fOpt.value = emp.id;
-            fOpt.innerText = emp.name;
+            fOpt.innerText = `${emp.name} (${salaryLabel})`;
             filterSelect.appendChild(fOpt);
         }
     });
@@ -2447,6 +2482,15 @@ async function loadPayroll() {
         payroll = await res.json();
         paymentsRaw = await payRes.json();
         paymentsData = Array.isArray(paymentsRaw) ? paymentsRaw : [];
+
+        // Sync employeesData from payroll response so openEmployeeModal works
+        // even when the Employees page has never been visited this session.
+        if (Array.isArray(payroll) && payroll.length > 0) {
+            const payrollEmpIds = new Set(payroll.map(p => p.employee.id));
+            // Remove stale entries and add/update from payroll
+            employeesData = employeesData.filter(e => !payrollEmpIds.has(e.id));
+            payroll.forEach(p => { if (p.employee) employeesData.push(p.employee); });
+        }
     } catch (err) {
         console.error('loadPayroll error:', err);
         grid.innerHTML = `<div style="grid-column:1/-1;background:#fee2e2;border:1px solid #fca5a5;border-radius:12px;padding:1.5rem;text-align:center;color:#b91c1c;">
@@ -2524,8 +2568,11 @@ async function loadPayroll() {
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.9rem; color: var(--gray); margin-bottom: 1rem;">
-                <div>Days Worked: <span style="color: var(--dark); font-weight: 500;">${p.daysWorked}</span></div>
-                <div>Salary: <span style="color: var(--dark); font-weight: 500;">₹${p.salaryEarned}</span></div>
+                ${p.isSupervisor
+                    ? `<div style="grid-column:1/-1;">&#128084; Monthly Salary: <span style="color:#4f46e5; font-weight: 600;">₹${p.salaryEarned}</span></div>`
+                    : `<div>Days Worked: <span style="color: var(--dark); font-weight: 500;">${p.daysWorked}</span></div>
+                       <div>Salary: <span style="color: var(--dark); font-weight: 500;">₹${p.salaryEarned}</span></div>`
+                }
                 <div>Fare: <span style="color: var(--dark); font-weight: 500;">₹${p.fareTotal}</span></div>
                 <div>Advance: <span style="color: var(--danger); font-weight: 500;">-₹${p.advancePaid}</span></div>
                 ${p.previousBalance !== 0 ?
