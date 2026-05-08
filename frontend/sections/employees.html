@@ -69,12 +69,18 @@
                         <div class="form-group grid-2">
                             <div>
                                 <label>Employee Type</label>
-                                <select id="emp-type" style="width:100%;padding:0.6rem;border:1px solid var(--gray);border-radius:6px;font-size:0.95rem;">
+                                <select id="emp-type" style="width:100%;padding:0.6rem;border:1px solid var(--gray);border-radius:6px;font-size:0.95rem;" onchange="toggleMonthlyFareField()">
                                     <option value="daily_wage">👷 Daily Wage Worker</option>
                                     <option value="fixed_salary">👔 Fixed Salary Supervisor</option>
                                 </select>
                             </div>
                             <div><label>Salary (Daily for Worker / Monthly for Supervisor)</label><input type="number" id="emp-salary" required></div>
+                        </div>
+                        <div class="form-group grid-2" id="emp-monthly-fare-row" style="display:none;">
+                            <div>
+                                <label style="color:#0369a1;font-weight:600;">🚌 Monthly Fare (₹) <span style="font-size:0.8em;font-weight:400;color:var(--gray);">— Added to payroll each month</span></label>
+                                <input type="number" id="emp-monthly-fare" placeholder="e.g. 500" min="0" style="border:2px solid #bae6fd;">
+                            </div>
                         </div>
                         <div class="form-group grid-2">
                             <div><label>Employee Login Password</label><input type="text" id="emp-password" placeholder="Set password for employee" value="123456"></div>

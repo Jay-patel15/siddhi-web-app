@@ -14,7 +14,7 @@ services/googleSheetService.js
 
 # Ignored scripts and docs
 GIT_WORKFLOW.md
-add_sunday_mode.sql
+*.sql
 
 # AI/Temp files
 .gemini/

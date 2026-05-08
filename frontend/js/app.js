@@ -266,7 +266,9 @@ function _initSection(sectionId) {
                 const password = document.getElementById('emp-password').value || '123456';
                 const typeEl = document.getElementById('emp-type');
                 const employee_type = typeEl ? typeEl.value : 'daily_wage';
-                const payload = { name, contact, salary, customId, designation, password, employee_type };
+                const monthlyFareEl = document.getElementById('emp-monthly-fare');
+                const monthly_fare = employee_type === 'fixed_salary' ? (parseFloat(monthlyFareEl?.value) || 0) : 0;
+                const payload = { name, contact, salary, customId, designation, password, employee_type, monthly_fare };
                 if (id) {
                     await fetch(`${API_URL}/employees/${id}`, {
                         method: 'PUT',
@@ -1674,10 +1676,12 @@ async function updateModalData() {
 
     if (isSupervisorUpdate) {
         // Supervisor: fixed monthly salary, no attendance tracking
-        earned = parseFloat(emp.salary);
-        totalBasePay = earned;
+        totalFare = parseFloat(emp.monthly_fare) || 0;
+        earned = parseFloat(emp.salary) + totalFare;
+        totalBasePay = parseFloat(emp.salary);
         // Show a placeholder row in attendance table
-        attBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#4f46e5;padding:1rem;font-weight:600;">&#128084; Fixed Salary Supervisor — Attendance not tracked. Monthly Salary: ₹${emp.salary}</td></tr>`;
+        const fareNote = totalFare > 0 ? ` + Fare: ₹${totalFare}` : '';
+        attBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#4f46e5;padding:1rem;font-weight:600;">&#128084; Fixed Salary Supervisor — Monthly Salary: ₹${emp.salary}${fareNote}</td></tr>`;
 
         // Hide attendance-specific stat cards for supervisor
         const presentCard = document.getElementById('modal-present');
@@ -1915,6 +1919,10 @@ function editEmployee(id) {
     document.getElementById('emp-password').value = emp.password || '123456';
     const typeEl = document.getElementById('emp-type');
     if (typeEl) typeEl.value = emp.employee_type || 'daily_wage';
+    // Monthly fare for supervisors
+    const fareEl = document.getElementById('emp-monthly-fare');
+    if (fareEl) fareEl.value = emp.monthly_fare || '';
+    toggleMonthlyFareField();
 
     document.getElementById('emp-submit-btn').innerText = 'Update Employee';
     document.getElementById('emp-cancel-btn').style.display = 'inline-block';
@@ -1926,6 +1934,16 @@ function resetEmployeeForm() {
     document.getElementById('emp-id').value = '';
     document.getElementById('emp-submit-btn').innerText = 'Add Employee';
     document.getElementById('emp-cancel-btn').style.display = 'none';
+    // Hide monthly fare row when form resets (defaults back to daily_wage)
+    const fareRow = document.getElementById('emp-monthly-fare-row');
+    if (fareRow) fareRow.style.display = 'none';
+}
+
+function toggleMonthlyFareField() {
+    const typeEl = document.getElementById('emp-type');
+    const fareRow = document.getElementById('emp-monthly-fare-row');
+    if (!typeEl || !fareRow) return;
+    fareRow.style.display = typeEl.value === 'fixed_salary' ? '' : 'none';
 }
 
 async function deleteEmployee(id, name) {

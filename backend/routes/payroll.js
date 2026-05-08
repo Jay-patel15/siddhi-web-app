@@ -44,6 +44,7 @@ router.get('/', async (req, res) => {
             if (isSupervisor) {
                 // Fixed salary supervisor: always earns fixed monthly salary regardless of attendance
                 totalSalary = fixedMonthlySalary;
+                totalFare = parseFloat(emp.monthly_fare) || 0; // Monthly fare added to payroll
                 daysWorked = null; // N/A for supervisors
             } else {
                 daysWorked = empAtt.length;
@@ -100,7 +101,8 @@ router.get('/', async (req, res) => {
                     });
 
                 const pastMonthsCount = pastPayMonths.size;
-                const pastEarningsSupervisor = fixedMonthlySalary * pastMonthsCount;
+                const monthlyTotal = fixedMonthlySalary + (parseFloat(emp.monthly_fare) || 0);
+                const pastEarningsSupervisor = monthlyTotal * pastMonthsCount;
 
                 const pastDeductionsSupervisor = advances
                     .filter(a => {
