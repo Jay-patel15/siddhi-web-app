@@ -2184,6 +2184,8 @@
             // ======= FIXED SALARY SUPERVISOR PATH =======
             if (currentEmployee.employee_type === 'fixed_salary') {
                 const monthlySalary = parseFloat(currentEmployee.salary) || 0;
+                const monthlyFare = parseFloat(currentEmployee.monthly_fare) || 0;
+                const monthlyTotal = monthlySalary + monthlyFare;
                 const totalAdvancesFixed = myAdvances
                     .filter(a => a.deductionMonth === month)
                     .reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
@@ -2201,11 +2203,14 @@
                 });
                 const pastDeductionsFixed = pastAdvFixed.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
 
-                // For supervisors, previous balance = (past salary months count * monthly salary) - past advances - past payments
-                // We use past payments and advances only — no attendance tracking
-                const pastBalance = Math.round(-pastDeductionsFixed - pastPaidFixed);
+                // Previous balance = past (salary+fare) earned - past advances - past payments
+                const pastMonthsSet = new Set([
+                    ...allData.payments.filter(p => p.employeeId === currentEmployee.id && p.salaryMonth < month).map(p => p.salaryMonth),
+                    ...pastAdvFixed.map(a => a.deductionMonth || (a.date ? a.date.substring(0, 7) : ''))
+                ]);
+                const pastBalance = Math.round((monthlyTotal * pastMonthsSet.size) - pastDeductionsFixed - pastPaidFixed);
 
-                const netDue = Math.round(monthlySalary - totalAdvancesFixed - totalPaymentsFixed + pastBalance);
+                const netDue = Math.round(monthlyTotal - totalAdvancesFixed - totalPaymentsFixed + pastBalance);
 
                 // Update "Net Payable" card for supervisor
                 const netCard = document.querySelector('.payable-card');
@@ -2215,9 +2220,10 @@
                     const val = document.getElementById('stat-net');
                     if (val) {
                         if (netDue <= 0 && totalPaymentsFixed > 0) {
-                            val.innerHTML = '<span style="font-weight:bold;">SETTLED</span><div style="font-size:0.6em;opacity:0.8;">Advance: ₹' + Math.round(totalAdvancesFixed) + ' | Paid: ₹' + Math.round(totalPaymentsFixed) + '</div>';
+                            val.innerHTML = '<span style="font-weight:bold;">SETTLED</span><div style="font-size:0.6em;opacity:0.8;">Advance: &#8377;' + Math.round(totalAdvancesFixed) + ' | Paid: &#8377;' + Math.round(totalPaymentsFixed) + '</div>';
                         } else {
-                            val.innerHTML = '&#8377;' + netDue + '<div style="font-size:0.6em;opacity:0.8;margin-top:2px;">Salary: &#8377;' + Math.round(monthlySalary) + ' | Advance: &#8377;' + Math.round(totalAdvancesFixed) + ' | Paid: &#8377;' + Math.round(totalPaymentsFixed) + '</div>';
+                            const fareNote = monthlyFare > 0 ? ' + Fare: &#8377;' + Math.round(monthlyFare) : '';
+                            val.innerHTML = '&#8377;' + netDue + '<div style="font-size:0.6em;opacity:0.8;margin-top:2px;">Salary: &#8377;' + Math.round(monthlySalary) + fareNote + ' | Advance: &#8377;' + Math.round(totalAdvancesFixed) + ' | Paid: &#8377;' + Math.round(totalPaymentsFixed) + '</div>';
                         }
                     }
                     netCard.style.display = '';
