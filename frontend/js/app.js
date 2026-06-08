@@ -376,29 +376,61 @@ function _initSection(sectionId) {
             advForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const id = document.getElementById('adv-id').value;
-                const formData = new FormData();
-                formData.append('employeeId', document.getElementById('adv-employee').value);
-                formData.append('amount', document.getElementById('adv-amount').value);
-                formData.append('date', document.getElementById('adv-date').value);
-                formData.append('deductionMonth', document.getElementById('adv-deduction-month').value);
-                formData.append('mode', document.getElementById('adv-mode').value);
-                formData.append('notes', document.getElementById('adv-notes').value);
+                const submitBtn = document.getElementById('adv-submit-btn');
+                const origText = submitBtn ? submitBtn.innerText : '';
+
+                // Validate: screenshot required only on NEW advances, not edits
                 const fileInput = document.getElementById('adv-screenshot');
-                if (fileInput.files[0]) {
-                    const compressed = await compressImage(fileInput.files[0]);
-                    formData.append('screenshot', compressed);
+                if (!id && (!fileInput.files || !fileInput.files[0])) {
+                    alert('⚠️ Screenshot proof is required to save a new advance payment.');
+                    return;
                 }
-                if (id) {
-                    await fetch(`${API_URL}/advances/${id}`, { method: 'PUT', body: formData });
-                    alert('Advance Updated!');
-                } else {
-                    await fetch(`${API_URL}/advances`, { method: 'POST', body: formData });
-                    alert('Advance Saved!');
+
+                if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = '⏳ Saving...'; }
+
+                try {
+                    const formData = new FormData();
+                    formData.append('employeeId', document.getElementById('adv-employee').value);
+                    formData.append('amount', document.getElementById('adv-amount').value);
+                    formData.append('date', document.getElementById('adv-date').value);
+                    formData.append('deductionMonth', document.getElementById('adv-deduction-month').value);
+                    formData.append('mode', document.getElementById('adv-mode').value);
+                    formData.append('notes', document.getElementById('adv-notes').value);
+
+                    if (fileInput.files[0]) {
+                        const compressed = await compressImage(fileInput.files[0]);
+                        formData.append('screenshot', compressed);
+                    }
+
+                    if (id) {
+                        const res = await fetch(`${API_URL}/advances/${id}`, { method: 'PUT', body: formData });
+                        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Update failed');
+                        if (submitBtn) { submitBtn.innerText = '✅ Updated!'; submitBtn.style.background = '#10b981'; }
+                        setTimeout(() => {
+                            resetAdvanceForm();
+                            loadAdvanceTable();
+                        }, 700);
+                    } else {
+                        const res = await fetch(`${API_URL}/advances`, { method: 'POST', body: formData });
+                        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Save failed');
+                        if (submitBtn) { submitBtn.innerText = '✅ Saved!'; submitBtn.style.background = '#10b981'; }
+                        setTimeout(() => {
+                            resetAdvanceForm();
+                            loadAdvanceTable();
+                        }, 700);
+                    }
+                } catch (err) {
+                    console.error('Advance save error:', err);
+                    alert('❌ Error: ' + err.message);
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = origText; submitBtn.style.background = ''; }
                 }
-                resetAdvanceForm();
-                loadAdvanceTable();
             });
             advForm._listenerAdded = true;
+
+            // Remove HTML5 'required' from screenshot — we validate manually above
+            // so that edit-mode (no new file) works without browser blocking the submit
+            const screenshotInput = document.getElementById('adv-screenshot');
+            if (screenshotInput) screenshotInput.removeAttribute('required');
         }
     }
 }
@@ -2451,7 +2483,8 @@ function editAdvance(id) {
 function resetAdvanceForm() {
     document.getElementById('advance-form').reset();
     document.getElementById('adv-id').value = '';
-    document.getElementById('adv-submit-btn').innerText = 'Save Payment';
+    const submitBtn = document.getElementById('adv-submit-btn');
+    if (submitBtn) { submitBtn.innerText = 'Save Payment'; submitBtn.disabled = false; submitBtn.style.background = ''; }
     document.getElementById('adv-cancel-btn').style.display = 'none';
     document.getElementById('adv-date').valueAsDate = new Date();
     const now = new Date();
@@ -2628,6 +2661,9 @@ async function loadPayroll() {
         `;
         grid.appendChild(card);
     });
+
+    // Register payment form listeners now that DOM is guaranteed to exist
+    _initPayrollForms();
 }
 
 // Payment Modal
@@ -2647,53 +2683,100 @@ function closePaymentModal() {
     document.getElementById('payment-form').reset();
 }
 
-const _paymentFormEl = document.getElementById('payment-form');
-if (_paymentFormEl && !_paymentFormEl._listenerAdded) {
-    _paymentFormEl._listenerAdded = true;
-    _paymentFormEl.addEventListener('submit', async (e) => {
-        e.preventDefault();
+// Payment form listeners are now registered in _initPayrollForms()
+// called from loadPayroll() to ensure the DOM elements exist first.
+function _initPayrollForms() {
+    // ---- PAYMENT FORM (Record new salary payment) ----
+    const _paymentFormEl = document.getElementById('payment-form');
+    if (_paymentFormEl && !_paymentFormEl._listenerAdded) {
+        _paymentFormEl._listenerAdded = true;
 
-        const submitBtn = _paymentFormEl.querySelector('[type="submit"]');
-        const origText = submitBtn ? submitBtn.innerText : '';
-        if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = '⏳ Saving...'; }
+        // Remove HTML5 'required' from screenshot — validate manually so subsequent
+        // payments (after first) don't get blocked by browser required validation
+        const payScreenshot = document.getElementById('pay-screenshot');
+        if (payScreenshot) payScreenshot.removeAttribute('required');
 
-        const formData = new FormData();
-        formData.append('employeeId', document.getElementById('pay-emp-id').value);
-        formData.append('salaryMonth', document.getElementById('pay-salary-month').value);
-        formData.append('amount', document.getElementById('pay-amount').value);
-        formData.append('date', document.getElementById('pay-date').value);
-        formData.append('mode', document.getElementById('pay-mode').value);
-        formData.append('notes', document.getElementById('pay-notes').value);
+        _paymentFormEl.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-        const fileInput = document.getElementById('pay-screenshot');
-        if (fileInput.files[0]) {
-            const compressed = await compressImage(fileInput.files[0]);
-            formData.append('screenshot', compressed);
-        }
-
-        try {
-            const res = await fetch(`${API_URL}/payments`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!res.ok) {
-                // Server returned an error — parse it and show to user
-                const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.error || `Server error ${res.status}`);
+            const fileInput = document.getElementById('pay-screenshot');
+            if (!fileInput.files || !fileInput.files[0]) {
+                alert('⚠️ Payment proof screenshot is required.');
+                return;
             }
 
-            // ✅ Success — close modal and refresh payroll
-            closePaymentModal();
-            await loadPayroll();   // await so UI is guaranteed fresh before any further action
-            alert('✅ Payment Recorded Successfully!');
-        } catch (err) {
-            console.error('Payment save error:', err);
-            alert('❌ Error saving payment: ' + err.message + '\n\nPlease try again.');
-            // Do NOT close modal — let user retry
-            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = origText; }
-        }
-    });
+            const submitBtn = _paymentFormEl.querySelector('[type="submit"]');
+            const origText = submitBtn ? submitBtn.innerText : '';
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = '⏳ Saving...'; }
+
+            const formData = new FormData();
+            formData.append('employeeId', document.getElementById('pay-emp-id').value);
+            formData.append('salaryMonth', document.getElementById('pay-salary-month').value);
+            formData.append('amount', document.getElementById('pay-amount').value);
+            formData.append('date', document.getElementById('pay-date').value);
+            formData.append('mode', document.getElementById('pay-mode').value);
+            formData.append('notes', document.getElementById('pay-notes').value);
+
+            const compressed = await compressImage(fileInput.files[0]);
+            formData.append('screenshot', compressed);
+
+            try {
+                const res = await fetch(`${API_URL}/payments`, { method: 'POST', body: formData });
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || `Server error ${res.status}`);
+                }
+                closePaymentModal();
+                await loadPayroll();
+                alert('✅ Payment Recorded Successfully!');
+            } catch (err) {
+                console.error('Payment save error:', err);
+                alert('❌ Error saving payment: ' + err.message + '\n\nPlease try again.');
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = origText; }
+            }
+        });
+    }
+
+    // ---- EDIT PAYMENT FORM ----
+    const _editPayFormEl = document.getElementById('edit-payment-form');
+    if (_editPayFormEl && !_editPayFormEl._listenerAdded) {
+        _editPayFormEl._listenerAdded = true;
+        _editPayFormEl.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('edit-pay-id').value;
+
+            const submitBtn = _editPayFormEl.querySelector('[type="submit"]');
+            const origText = submitBtn ? submitBtn.innerText : '';
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = '⏳ Updating...'; }
+
+            const formData = new FormData();
+            formData.append('amount', document.getElementById('edit-pay-amount').value);
+            formData.append('date', document.getElementById('edit-pay-date').value);
+            formData.append('mode', document.getElementById('edit-pay-mode').value);
+            formData.append('notes', document.getElementById('edit-pay-notes').value);
+
+            const fileInput = document.getElementById('edit-pay-screenshot');
+            if (fileInput && fileInput.files[0]) {
+                const compressed = await compressImage(fileInput.files[0]);
+                formData.append('screenshot', compressed);
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/payments/${id}`, { method: 'PUT', body: formData });
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || `Server error ${res.status}`);
+                }
+                closeEditPaymentModal();
+                await loadPayroll();
+                alert('✅ Payment updated successfully!');
+            } catch (err) {
+                console.error('Edit payment error:', err);
+                alert('❌ Error updating payment: ' + err.message);
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = origText; }
+            }
+        });
+    }
 }
 
 // --- EDIT PAYMENT ---
@@ -2734,48 +2817,7 @@ async function deletePaymentRecord(paymentId) {
     }
 }
 
-const _editPayFormEl = document.getElementById('edit-payment-form');
-if (_editPayFormEl && !_editPayFormEl._listenerAdded) {
-    _editPayFormEl._listenerAdded = true;
-    _editPayFormEl.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const id = document.getElementById('edit-pay-id').value;
-
-        const submitBtn = _editPayFormEl.querySelector('[type="submit"]');
-        const origText = submitBtn ? submitBtn.innerText : '';
-        if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = '⏳ Updating...'; }
-
-        const formData = new FormData();
-        formData.append('amount', document.getElementById('edit-pay-amount').value);
-        formData.append('date', document.getElementById('edit-pay-date').value);
-        formData.append('mode', document.getElementById('edit-pay-mode').value);
-        formData.append('notes', document.getElementById('edit-pay-notes').value);
-
-        const fileInput = document.getElementById('edit-pay-screenshot');
-        if (fileInput.files[0]) {
-            const compressed = await compressImage(fileInput.files[0]);
-            formData.append('screenshot', compressed);
-        }
-
-        try {
-            const res = await fetch(`${API_URL}/payments/${id}`, {
-                method: 'PUT',
-                body: formData
-            });
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.error || `Server error ${res.status}`);
-            }
-            closeEditPaymentModal();
-            await loadPayroll();  // await to guarantee UI is fresh
-            alert('✅ Payment updated successfully!');
-        } catch (err) {
-            console.error('Edit payment error:', err);
-            alert('❌ Error updating payment: ' + err.message);
-            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = origText; }
-        }
-    });
-}
+// edit-payment-form listener is now inside _initPayrollForms() called from loadPayroll()
 
 // ==================== AUTO DEFAULT CURRENT MONTH ====================
 // Sets month defaults for all currently-present month inputs
