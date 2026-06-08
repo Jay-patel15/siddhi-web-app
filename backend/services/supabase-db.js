@@ -11,34 +11,49 @@ if (!SUPABASE_URL || !SUPABASE_Service_Role_KEY) {
     // Don't crash immediately to allow for setup, but functionality will fail
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_Service_Role_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_Service_Role_KEY, {
+    db: { schema: 'public' },
+    global: {
+        headers: { 'x-connection-encrypted': 'true' }
+    },
+    auth: { persistSession: false }
+});
 
 // Retry Helper for Transient Network Errors
 // Safe for all operations — inserts use low maxRetries (1) to avoid true duplicates
-const retry = async (operation, maxRetries = 3, delay = 500) => {
+const retry = async (operation, maxRetries = 5, delay = 800) => {
     let lastError;
-    // Simple exponential backoff
+    // Exponential backoff with jitter
     for (let i = 0; i < maxRetries; i++) {
         try {
             return await operation();
         } catch (error) {
             lastError = error;
             // Treat known Supabase pooler/connection errors as transient
+            // schema_migrations error = Supabase PgBouncer transaction-mode bug (very common)
+            const isPgBouncerBug = error.message.includes('schema_migrations');
             const isNetworkError =
+                isPgBouncerBug ||
                 error.message.includes('fetch failed') ||
                 error.message.includes('network') ||
                 error.message.includes('timeout') ||
                 error.message.includes('ECONNRESET') ||
-                error.message.includes('schema_migrations') ||   // Supabase PgBouncer transaction-mode bug
                 error.message.includes('connection') ||
                 error.message.includes('ENOTFOUND') ||
-                error.message.includes('503');
+                error.message.includes('503') ||
+                error.message.includes('connection refused') ||
+                error.message.includes('Connection terminated');
 
             if (isNetworkError) {
-                console.warn(`Database operation failed (Attempt ${i + 1}/${maxRetries}): ${error.message}. Retrying...`);
-                if (i < maxRetries - 1) await new Promise(res => setTimeout(res, delay * (i + 1)));
+                // PgBouncer bug needs a longer cool-down before retry
+                const retryDelay = isPgBouncerBug
+                    ? delay * (i + 2)   // longer wait: 1.6s, 2.4s, 3.2s, 4s
+                    : delay * (i + 1);  // standard backoff
+
+                console.warn(`⚠️  DB transient error (Attempt ${i + 1}/${maxRetries})${isPgBouncerBug ? ' [PgBouncer/schema_migrations]' : ''}: ${error.message}. Retrying in ${retryDelay}ms...`);
+                if (i < maxRetries - 1) await new Promise(res => setTimeout(res, retryDelay));
             } else {
-                // Logic error (e.g. constraint violation) — fail fast
+                // Logic error (e.g. constraint violation) — fail fast, no retry
                 throw error;
             }
         }

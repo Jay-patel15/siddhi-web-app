@@ -1771,7 +1771,11 @@
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(att)
                     });
-                    if (!res.ok) throw new Error("Server error saving attendance");
+                    if (!res.ok) {
+                        let errMsg = "Server error saving attendance";
+                        try { const errData = await res.json(); errMsg = errData.error || errMsg; } catch (_) {}
+                        throw new Error(errMsg);
+                    }
                     savedRecord = await res.json();
                     
                     // Save exact start time locally for a smoother timer initialization
@@ -1844,7 +1848,11 @@
                         method: 'PUT', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(updateData)
                     });
-                    if (!res.ok) throw new Error("Server error saving checkout");
+                    if (!res.ok) {
+                        let errMsg = "Server error saving checkout";
+                        try { const errData = await res.json(); errMsg = errData.error || errMsg; } catch (_) {}
+                        throw new Error(errMsg);
+                    }
 
                     // Step 2: Upload check-out photo
                     if (base64Image) {
