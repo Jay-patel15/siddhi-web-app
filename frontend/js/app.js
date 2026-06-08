@@ -3827,21 +3827,47 @@ const _originalConfirmDelete = window.confirmDelete;
 window.confirmDelete = async function () {
     document.getElementById('delete-confirm-modal').style.display = 'none';
     if (_attGalleryMode) {
+        if (_attSelectedForDeletion.length === 0) return;
+
+        // Save the list BEFORE clearing, so we can use it for filtering below
+        const itemsToDelete = [..._attSelectedForDeletion];
+
+        const deleteBtn = document.getElementById('delete-selected-btn');
+        const downloadBtn = document.getElementById('download-selected-btn');
+        if (deleteBtn) { deleteBtn.disabled = true; deleteBtn.innerText = '⏳ Deleting...'; }
+
         try {
-            for (const item of _attSelectedForDeletion) {
-                await fetch(`${API_URL}/attendance-photos/${item.attendanceId}/${item.type}`, { method: 'DELETE' });
-                _attPhotosAll = _attPhotosAll.filter(p => !(p.attendanceId === item.attendanceId && p.type === item.type));
+            let anyFailed = false;
+            for (const item of itemsToDelete) {
+                const res = await fetch(`${API_URL}/attendance-photos/${item.attendanceId}/${item.type}`, { method: 'DELETE' });
+                if (!res.ok) {
+                    console.error('Delete failed for', item.attendanceId, item.type);
+                    anyFailed = true;
+                } else {
+                    // Remove from master photo list
+                    _attPhotosAll = _attPhotosAll.filter(p => !(p.attendanceId === item.attendanceId && p.type === item.type));
+                }
             }
+
+            // Clear selection
             _attSelectedForDeletion = [];
-            document.getElementById('delete-selected-btn').style.display = 'none';
-            document.getElementById('download-selected-btn').style.display = 'none';
+            if (deleteBtn) { deleteBtn.style.display = 'none'; deleteBtn.disabled = false; deleteBtn.innerText = '🗑️ Delete'; }
+            if (downloadBtn) { downloadBtn.style.display = 'none'; }
+
+            // Update gallery view using the saved itemsToDelete (NOT the now-empty array)
             _attGalleryImages = _attGalleryImages.filter(p =>
-                !_attSelectedForDeletion.some(s => s.attendanceId === p.attendanceId && s.type === p.type));
+                !itemsToDelete.some(s => s.attendanceId === p.attendanceId && s.type === p.type));
             _renderAttGalleryImages(_attGalleryImages);
             _renderAttPhotoCards();
-            alert('Photo(s) deleted successfully!');
+
+            if (anyFailed) {
+                alert('⚠️ Some photos could not be deleted. Please try again.');
+            } else {
+                alert('✅ Photo(s) deleted successfully!');
+            }
         } catch (e) {
-            alert('Error deleting: ' + e.message);
+            if (deleteBtn) { deleteBtn.disabled = false; deleteBtn.innerText = `🗑️ Delete (${itemsToDelete.length})`; }
+            alert('❌ Error deleting: ' + e.message);
         }
     } else {
         _originalConfirmDelete && _originalConfirmDelete();

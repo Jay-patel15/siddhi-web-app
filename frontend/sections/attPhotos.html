@@ -87,11 +87,12 @@
         <div class="card" style="width:95%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;padding:0;overflow:hidden;">
             <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;padding:0.75rem 1rem;border-bottom:1px solid var(--gray);background:var(--light);gap:0.5rem;">
                 <h3 id="gallery-title" style="margin:0;font-size:1rem;">📷 Photo Gallery</h3>
-                <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
-                    <input type="date" id="gallery-date-filter" onchange="filterGalleryByDate()" style="padding:0.4rem;font-size:0.85rem;">
+                <div style="display:flex;gap:0.5rem;align-items:center;">
                     <button class="btn" onclick="closeGalleryModal()" style="padding:0.4rem 0.75rem;background:var(--danger);color:white;font-size:0.85rem;">✕ Close</button>
                 </div>
             </div>
+            <!-- hidden dummy to avoid JS errors on filterGalleryByDate() refs -->
+            <input type="hidden" id="gallery-date-filter" value="">
             <div style="flex:1;overflow-y:auto;padding:1rem;">
                 <div id="gallery-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0.75rem;"></div>
                 <p id="gallery-empty" style="display:none;text-align:center;color:var(--gray);padding:2rem;">No photos found.</p>
