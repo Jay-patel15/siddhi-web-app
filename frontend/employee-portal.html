@@ -1099,7 +1099,7 @@
                         onchange="handleFallbackCapture(event)">
 
                     <div id="camera-section" class="camera-container">
-                        <video id="camera-video" autoplay playsinline></video>
+                        <video id="camera-video" autoplay playsinline muted></video>
                         <canvas id="camera-canvas"></canvas>
                         <div class="camera-overlay">
                             <div
@@ -1393,6 +1393,37 @@
         let pendingAttendance = null;
         let videoStream = null;
         let attendanceTimerInterval = null;
+
+        // Retry fetch for transient Supabase/PgBouncer errors
+        async function retryFetch(url, options, maxRetries = 3, delayMs = 2000) {
+            let lastErr;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const res = await fetch(url, options);
+                    if (res.ok) return res;
+                    // Try to read error body
+                    let errData = {};
+                    try { errData = await res.clone().json(); } catch(_) {}
+                    const msg = errData.error || '';
+                    // Only retry on PgBouncer/transient server errors
+                    const isTransient = res.status >= 500 || msg.includes('schema_migrations') || msg.includes('connection') || msg.includes('timeout');
+                    if (isTransient && i < maxRetries - 1) {
+                        console.warn(`⚠️ Transient error (attempt ${i+1}/${maxRetries}): ${msg}. Retrying in ${delayMs}ms...`);
+                        await new Promise(r => setTimeout(r, delayMs));
+                        continue;
+                    }
+                    // Non-transient or last retry — return the bad response so caller can handle
+                    return res;
+                } catch (err) {
+                    lastErr = err;
+                    if (i < maxRetries - 1) {
+                        console.warn(`⚠️ Network error (attempt ${i+1}/${maxRetries}): ${err.message}. Retrying...`);
+                        await new Promise(r => setTimeout(r, delayMs));
+                    }
+                }
+            }
+            throw lastErr || new Error('Request failed after retries');
+        }
 
         // Check session on load
         window.onload = async function () {
@@ -1689,9 +1720,16 @@
 
             statusMsg.innerHTML = "Initializing...";
             statusMsg.className = "status-msg info"; statusMsg.style.display = 'block';
-            camSection.style.display = 'block'; hint.style.display = 'block';
-            captureBtn.style.display = 'flex'; captureBtn.disabled = true;
+            
+            // Hide camera container and show starting text initially
+            camSection.style.display = 'none'; 
+            hint.style.display = 'none';
+            captureBtn.style.display = 'flex'; 
+            captureBtn.disabled = true;
             captureBtn.innerHTML = "⏳ Starting Camera...";
+            
+            // Restore default handleAttendanceAction binding
+            captureBtn.onclick = handleAttendanceAction;
             document.getElementById('btn-check-in').disabled = true;
             document.getElementById('btn-check-out').disabled = true;
 
@@ -1702,32 +1740,59 @@
             // Prepare state tracking
             pendingAttendance = { type, location: null };
 
+            let cameraSucceeded = false;
+            let cameraError = null;
+
+            // 1. Start Camera
             try {
-                // 1. Start Camera Immediately
-                const cameraPromise = initCamera();
+                await initCamera();
+                cameraSucceeded = true;
+                camSection.style.display = 'block';
+                hint.style.display = 'block';
+            } catch (err) {
+                console.warn("Camera init failed:", err);
+                cameraError = err;
+            }
 
-                // 2. Fetch Location in Background
-                const locationPromise = getLocation().then(loc => {
-                    pendingAttendance.location = loc;
-                    securityAccuracy.innerHTML = `found (${Math.round(loc.accuracy)}m)`;
-                    securityAccuracy.style.color = '#10b981'; // Green
-                }).catch(err => {
-                    console.warn("Location error:", err);
-                    securityAccuracy.innerHTML = "Please turn on your Location 📍";
-                    securityAccuracy.style.color = 'var(--danger)';
-                    throw new Error("Location is required. Please turn on your device's GPS and try again.");
-                });
+            // 2. Fetch Location in background (do not let location errors crash the camera stream)
+            const locationPromise = getLocation().then(loc => {
+                pendingAttendance.location = loc;
+                securityAccuracy.innerHTML = `found (${Math.round(loc.accuracy)}m)`;
+                securityAccuracy.style.color = '#10b981'; // Green
+                return loc;
+            }).catch(err => {
+                console.warn("Location error:", err);
+                securityAccuracy.innerHTML = "Please turn on your Location 📍";
+                securityAccuracy.style.color = 'var(--danger)';
+                return null;
+            });
 
-                // Wait for BOTH camera and location to be ready
-                await Promise.all([cameraPromise, locationPromise]);
-
-                captureBtn.disabled = false;
+            if (cameraSucceeded) {
                 captureBtn.innerHTML = "📸 Capture & Save";
                 statusMsg.innerHTML = "📸 Ready to Capture";
-
-            } catch (err) {
-                stopCamera(); camSection.style.display = 'none';
-                statusMsg.innerHTML = err.message; statusMsg.className = "status-msg error";
+                
+                // Wait briefly for location to try to resolve immediately before enabling
+                await Promise.race([
+                    locationPromise,
+                    new Promise(r => setTimeout(r, 2000))
+                ]);
+                captureBtn.disabled = false;
+            } else {
+                // Camera stream failed to start (e.g. insecure HTTP context on mobile)
+                stopCamera();
+                camSection.style.display = 'none';
+                hint.style.display = 'none';
+                
+                const errMsg = cameraError ? (cameraError.message || cameraError) : "Camera not supported or permission denied";
+                statusMsg.innerHTML = `${errMsg}<br><small style="color:var(--gray)">Direct camera failed. Click below to use native camera fallback.</small>`;
+                statusMsg.className = "status-msg error";
+                
+                if (captureBtn) {
+                    captureBtn.style.display = 'flex';
+                    captureBtn.disabled = false;
+                    captureBtn.innerHTML = "📸 Use Native Camera (Fallback)";
+                    captureBtn.onclick = () => document.getElementById('fallback-camera').click();
+                }
                 updateAttendanceButtons();
             }
         }
@@ -1758,6 +1823,7 @@
 
                 if (type === 'in') {
                     // Step 1: Save attendance record (without base64 — photo uploaded separately)
+                    statusFull.innerHTML = "⏳ Step 1/2: Saving check-in...";
                     const att = {
                         date: dateStr,
                         employeeId: String(currentEmployee.id),
@@ -1767,11 +1833,16 @@
                         slabMode: false,
                         securityFlag: location && location.isMocked ? 'MOCKED_LOCATION' : 'SECURE'
                     };
-                    res = await fetch(`${API_URL}/api/attendance`, {
+                    // Use retryFetch to handle PgBouncer/transient errors automatically
+                    res = await retryFetch(`${API_URL}/api/attendance`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(att)
                     });
-                    if (!res.ok) throw new Error("Server error saving attendance");
+                    if (!res.ok) {
+                        let errMsg = "Server error saving check-in. Please try again.";
+                        try { const errData = await res.json(); errMsg = errData.error || errMsg; } catch (_) {}
+                        throw new Error(errMsg);
+                    }
                     savedRecord = await res.json();
                     
                     // Save exact start time locally for a smoother timer initialization
@@ -1779,14 +1850,14 @@
 
                     // Step 2: Upload photo to Supabase Storage
                     if (base64Image) {
-                        statusFull.innerHTML = "📤 Uploading photo...";
+                        statusFull.innerHTML = "📤 Step 2/2: Uploading photo...";
                         const overlay = document.getElementById('upload-overlay');
                         const previewImg = document.getElementById('upload-preview-img');
                         if (overlay && previewImg) {
                             previewImg.src = base64Image;
                             overlay.style.display = 'flex';
                         }
-                        const photoRes = await fetch(`${API_URL}/api/attendance/upload-photo`, {
+                        const photoRes = await retryFetch(`${API_URL}/api/attendance/upload-photo`, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 attendanceId: savedRecord.id,
@@ -1800,13 +1871,13 @@
                         if (!photoRes.ok) {
                             const errData = await photoRes.json().catch(() => ({}));
                             console.warn('Check-in photo upload failed:', errData);
-                            // Attendance is saved — just warn about the photo
-                            statusFull.innerHTML = `⚠️ Attendance saved, but photo could not be uploaded. Please try check-in again.`;
-                            statusFull.className = 'status-msg error';
+                            // Attendance is saved — just warn about the photo, don't fail the whole flow
+                            statusFull.innerHTML = `✅ Check-in saved at ${timeStr}! (Photo upload failed — check-in is still recorded)`;
+                            statusFull.className = 'status-msg warning';
                             stopCamera();
                             document.getElementById('camera-section').style.display = 'none';
                             captureBtn.style.display = 'none';
-                            await loadEmployeeData(currentEmployee.id);
+                            setTimeout(() => { window.location.reload(); }, 2500);
                             return;
                         }
                     }
@@ -1835,27 +1906,33 @@
                     const workedHours = ((timeOutDate - timeInDate) / (1000 * 60 * 60)).toFixed(2);
 
                     // Step 1: Update attendance record with timeOut and location (no base64)
+                    statusFull.innerHTML = "⏳ Step 1/2: Saving check-out time...";
                     const updateData = {
                         timeOut: timeStr, workedHours,
                         checkOutLoc: location ? { lat: location.lat, lng: location.lng, accuracy: location.accuracy } : null,
                         securityFlag: location && location.isMocked ? 'MOCKED_LOCATION' : 'SECURE'
                     };
-                    res = await fetch(`${API_URL}/api/attendance/${openRecord.id}`, {
+                    // Use retryFetch to handle PgBouncer/transient errors automatically
+                    res = await retryFetch(`${API_URL}/api/attendance/${openRecord.id}`, {
                         method: 'PUT', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(updateData)
                     });
-                    if (!res.ok) throw new Error("Server error saving checkout");
+                    if (!res.ok) {
+                        let errMsg = "Server error saving check-out. Please try again.";
+                        try { const errData = await res.json(); errMsg = errData.error || errMsg; } catch (_) {}
+                        throw new Error(errMsg);
+                    }
 
                     // Step 2: Upload check-out photo
                     if (base64Image) {
-                        statusFull.innerHTML = "📤 Uploading photo...";
+                        statusFull.innerHTML = "📤 Step 2/2: Uploading photo...";
                         const overlay = document.getElementById('upload-overlay');
                         const previewImg = document.getElementById('upload-preview-img');
                         if (overlay && previewImg) {
                             previewImg.src = base64Image;
                             overlay.style.display = 'flex';
                         }
-                        const photoRes = await fetch(`${API_URL}/api/attendance/upload-photo`, {
+                        const photoRes = await retryFetch(`${API_URL}/api/attendance/upload-photo`, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 attendanceId: openRecord.id,
@@ -1869,13 +1946,13 @@
                         if (!photoRes.ok) {
                             const errData = await photoRes.json().catch(() => ({}));
                             console.warn('Check-out photo upload failed:', errData);
-                            // Checkout time IS saved — just warn about the photo
-                            statusFull.innerHTML = `⚠️ Checkout saved (${timeStr}), but photo could not be uploaded. Please try again.`;
-                            statusFull.className = 'status-msg error';
+                            // Checkout time IS saved — just warn about the photo, don't fail the whole checkout
+                            statusFull.innerHTML = `✅ Check-out saved at ${timeStr}! (Photo upload failed — checkout is still recorded)`;
+                            statusFull.className = 'status-msg warning';
                             stopCamera();
                             document.getElementById('camera-section').style.display = 'none';
                             captureBtn.style.display = 'none';
-                            await loadEmployeeData(currentEmployee.id);
+                            setTimeout(() => { window.location.reload(); }, 2500);
                             return;
                         }
                     }
@@ -1886,7 +1963,7 @@
                 stopCamera();
                 document.getElementById('camera-section').style.display = 'none';
                 captureBtn.style.display = 'none';
-                await loadEmployeeData(currentEmployee.id);
+                setTimeout(() => { window.location.reload(); }, 1500);
             } catch (err) {
                 statusFull.innerHTML = `❌ Error: ${err.message}`;
                 statusFull.className = "status-msg error";
@@ -1910,6 +1987,25 @@
                 if (captureBtn) captureBtn.disabled = false;
                 return;
             }
+
+            // Retry location fetch if it's missing (e.g. if employee enabled location after opening page)
+            if (!pendingAttendance.location) {
+                const statusFull = document.getElementById('attendance-status');
+                statusFull.innerHTML = "⏳ Fetching location...";
+                statusFull.className = "status-msg info";
+                statusFull.style.display = 'block';
+                try {
+                    pendingAttendance.location = await getLocation();
+                    const securityAccuracy = document.getElementById('security-accuracy');
+                    if (securityAccuracy) {
+                        securityAccuracy.innerHTML = `found (${Math.round(pendingAttendance.location.accuracy)}m)`;
+                        securityAccuracy.style.color = '#10b981';
+                    }
+                } catch (err) {
+                    console.warn("Retry location fetch failed:", err);
+                }
+            }
+
             await submitAttendanceAction(pendingAttendance.type, pendingAttendance.location, base64);
         }
 
@@ -1919,6 +2015,22 @@
             const statusFull = document.getElementById('attendance-status');
             statusFull.innerHTML = "⏳ Processing image...";
             statusFull.style.display = 'block';
+
+            // Retry location fetch if missing
+            if (!pendingAttendance.location) {
+                try {
+                    statusFull.innerHTML = "⏳ Fetching location & processing image...";
+                    pendingAttendance.location = await getLocation();
+                    const securityAccuracy = document.getElementById('security-accuracy');
+                    if (securityAccuracy) {
+                        securityAccuracy.innerHTML = `found (${Math.round(pendingAttendance.location.accuracy)}m)`;
+                        securityAccuracy.style.color = '#10b981';
+                    }
+                } catch (err) {
+                    console.warn("Fallback location fetch failed:", err);
+                }
+            }
+
             const compressed = await compressImage(file);
             const reader = new FileReader();
             reader.onload = async (e) => {
@@ -2068,13 +2180,59 @@
                 }
 
                 // Update header
-                // document.getElementById('header-emp-name').innerText = currentEmployee.name; // Removed old header
-
-                // Update details header
                 updateHeaderDetails();
 
-                // Update attendance buttons
-                updateAttendanceButtons();
+                // Show/hide attendance section based on employee type
+                const isFixed = currentEmployee.employee_type === 'fixed_salary';
+                const attSection = document.getElementById('attendance-action-section');
+                const mobileNav = document.querySelector('.mobile-nav');
+
+                if (isFixed) {
+                    // SUPERVISOR: hide attendance check-in/out entirely
+                    if (attSection) attSection.style.display = 'none';
+
+                    // Replace attendance mobile nav tab with a note
+                    if (mobileNav) {
+                        mobileNav.innerHTML = `
+                            <div class="nav-item active" onclick="switchTab('advances')">Advances</div>
+                            <div class="nav-item" onclick="switchTab('payments')">Payments</div>
+                        `;
+                        // Make advances the default active tab
+                        const advSec = document.getElementById('section-advances');
+                        const attSec = document.getElementById('section-attendance');
+                        const paySec = document.getElementById('section-payments');
+                        if (attSec) { attSec.classList.remove('active'); attSec.style.display = 'none'; }
+                        if (advSec) { advSec.classList.add('active'); advSec.style.display = ''; }
+                    }
+
+                    // Hide attendance-based stat cards (days present/absent, hours)
+                    const hideStatIds = ['stat-present', 'stat-absent', 'stat-normal-hours', 'stat-ot-hours', 'stat-hours', 'stat-gross'];
+                    hideStatIds.forEach(sid => {
+                        const el = document.getElementById(sid);
+                        if (el) { const card = el.closest('.stat-card'); if (card) card.style.display = 'none'; }
+                    });
+
+                    // Show fixed salary banner inside the stats area
+                    const dashGrid = document.querySelector('.dashboard-grid');
+                    if (dashGrid && !document.getElementById('fixed-salary-banner')) {
+                        const banner = document.createElement('div');
+                        banner.id = 'fixed-salary-banner';
+                        banner.style.cssText = 'grid-column:1/-1;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;border-radius:10px;padding:1rem 1.5rem;display:flex;align-items:center;gap:1rem;';
+                        banner.innerHTML = '<span style="font-size:1.8rem">&#128084;</span><div><div style="font-weight:700;font-size:1rem;">Fixed Salary Supervisor</div><div style="font-size:0.85rem;opacity:0.85;margin-top:2px;">Attendance is not tracked. Salary is paid as a fixed monthly amount.</div></div>';
+                        dashGrid.insertBefore(banner, dashGrid.firstChild);
+                    }
+                } else {
+                    // DAILY WAGE: show attendance section normally
+                    if (attSection) attSection.style.display = '';
+                    if (mobileNav) mobileNav.innerHTML = `
+                        <div class="nav-item active" onclick="switchTab('attendance')">Attendance</div>
+                        <div class="nav-item" onclick="switchTab('advances')">Advances</div>
+                        <div class="nav-item" onclick="switchTab('payments')">Payments</div>
+                    `;
+                }
+
+                // Update attendance buttons (only relevant for daily_wage)
+                if (!isFixed) updateAttendanceButtons();
 
                 // Load month data
                 loadData();
@@ -2088,16 +2246,26 @@
         function updateHeaderDetails() {
             document.getElementById('details-emp-name').innerText = currentEmployee.name;
 
+            const isFixed = currentEmployee.employee_type === 'fixed_salary';
             const salary = currentEmployee.dailySalary || currentEmployee.salary;
             const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
             const hourlyRate = (parseFloat(salary) / stdHours).toFixed(2);
 
-            document.getElementById('details-emp-meta').innerHTML = `
-                ID: <strong>${currentEmployee.customId || currentEmployee.id}</strong> | 
-                Designation: <strong>${currentEmployee.designation || 'N/A'}</strong> | 
-                Daily Salary: <strong>₹${salary}</strong> | 
-                Hourly Rate: <strong>₹${hourlyRate}</strong>
-            `;
+            if (isFixed) {
+                document.getElementById('details-emp-meta').innerHTML = `
+                    ID: <strong>${currentEmployee.customId || currentEmployee.id}</strong> |
+                    Designation: <strong>${currentEmployee.designation || 'Supervisor'}</strong> |
+                    Monthly Salary: <strong>&#8377;${salary}</strong>
+                    <span style="background:#4f46e5;color:white;font-size:0.72em;padding:2px 10px;border-radius:20px;font-weight:600;margin-left:8px;">&#128084; Fixed Salary</span>
+                `;
+            } else {
+                document.getElementById('details-emp-meta').innerHTML = `
+                    ID: <strong>${currentEmployee.customId || currentEmployee.id}</strong> |
+                    Designation: <strong>${currentEmployee.designation || 'N/A'}</strong> |
+                    Daily Salary: <strong>&#8377;${salary}</strong> |
+                    Hourly Rate: <strong>&#8377;${hourlyRate}</strong>
+                `;
+            }
         }
 
         function loadData() {
@@ -2109,21 +2277,90 @@
 
             // Filter attendance for this employee and month
             const myAttendance = allData.attendance.filter(a =>
-                a.employeeId === currentEmployee.id && a.date.startsWith(month)
+                String(a.employeeId) === String(currentEmployee.id) && a.date.startsWith(month)
             ).sort((a, b) => a.date.localeCompare(b.date));
             console.log('My Attendance:', myAttendance);
 
             // Filter advances for this employee and month
             const myAdvances = allData.advances.filter(a =>
-                a.employeeId === currentEmployee.id &&
+                String(a.employeeId) === String(currentEmployee.id) &&
                 (a.date.startsWith(month) || a.deductionMonth === month)
             );
 
             // Filter payments for this employee and month
             const myPayments = allData.payments.filter(p =>
-                p.employeeId === currentEmployee.id &&
+                String(p.employeeId) === String(currentEmployee.id) &&
                 (p.date.startsWith(month) || p.salaryMonth === month)
             );
+
+            // ======= FIXED SALARY SUPERVISOR PATH =======
+            if (currentEmployee.employee_type === 'fixed_salary') {
+                const monthlySalary = parseFloat(currentEmployee.salary) || 0;
+                const monthlyFare = parseFloat(currentEmployee.monthly_fare) || 0;
+                const monthlyTotal = monthlySalary + monthlyFare;
+                const totalAdvancesFixed = myAdvances
+                    .filter(a => a.deductionMonth === month)
+                    .reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+                const totalPaymentsFixed = myPayments
+                    .filter(p => p.salaryMonth === month)
+                    .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+                // Past balance for supervisor (salary-based past months)
+                const pastPayFixed = allData.payments.filter(p => String(p.employeeId) === String(currentEmployee.id) && p.salaryMonth < month);
+                const pastPaidFixed = pastPayFixed.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+                const pastAdvFixed = allData.advances.filter(a => {
+                    if (String(a.employeeId) !== String(currentEmployee.id)) return false;
+                    const dedMonth = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
+                    return dedMonth < month;
+                });
+                const pastDeductionsFixed = pastAdvFixed.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+
+                // Previous balance = past (salary+fare) earned - past advances - past payments
+                const pastMonthsSet = new Set([
+                    ...allData.payments.filter(p => String(p.employeeId) === String(currentEmployee.id) && p.salaryMonth < month).map(p => p.salaryMonth),
+                    ...pastAdvFixed.map(a => a.deductionMonth || (a.date ? a.date.substring(0, 7) : ''))
+                ]);
+                const pastBalance = Math.round((monthlyTotal * pastMonthsSet.size) - pastDeductionsFixed - pastPaidFixed);
+
+                const netDue = Math.round(monthlyTotal - totalAdvancesFixed - totalPaymentsFixed + pastBalance);
+
+                // Update "Net Payable" card for supervisor
+                const netCard = document.querySelector('.payable-card');
+                if (netCard) {
+                    const title = netCard.querySelector('.stat-title');
+                    if (title) title.innerHTML = 'Net Due (This Month)';
+                    const val = document.getElementById('stat-net');
+                    if (val) {
+                        if (netDue <= 0 && totalPaymentsFixed > 0) {
+                            val.innerHTML = '<span style="font-weight:bold;">SETTLED</span><div style="font-size:0.6em;opacity:0.8;">Advance: &#8377;' + Math.round(totalAdvancesFixed) + ' | Paid: &#8377;' + Math.round(totalPaymentsFixed) + '</div>';
+                        } else {
+                            const fareNote = monthlyFare > 0 ? ' + Fare: &#8377;' + Math.round(monthlyFare) : '';
+                            val.innerHTML = '&#8377;' + netDue + '<div style="font-size:0.6em;opacity:0.8;margin-top:2px;">Salary: &#8377;' + Math.round(monthlySalary) + fareNote + ' | Advance: &#8377;' + Math.round(totalAdvancesFixed) + ' | Paid: &#8377;' + Math.round(totalPaymentsFixed) + '</div>';
+                        }
+                    }
+                    netCard.style.display = '';
+                }
+
+                // Previous Balance
+                const prevEl = document.getElementById('stat-prev-bal');
+                const prevCard = document.getElementById('card-prev-bal');
+                if (prevEl && prevCard) {
+                    if (pastBalance === 0) {
+                        prevEl.innerHTML = '<span style="color:inherit">-</span>';
+                        prevCard.className = 'stat-card prev-bal-neutral';
+                    } else {
+                        prevEl.innerHTML = `<span>${pastBalance > 0 ? '+' : ''}&#8377;${pastBalance}</span>`;
+                        prevCard.className = `stat-card ${pastBalance < 0 ? 'prev-bal-neg' : 'prev-bal-pos'}`;
+                    }
+                    prevCard.style.display = '';
+                }
+
+                // Update tables (advances + payments only)
+                updateAdvancesTable(myAdvances);
+                updatePaymentsTable(myPayments);
+                return; // Skip all daily-wage logic below
+            }
+            // ======= END FIXED SALARY PATH =======
 
             // Calculate stats
             const daysPresent = myAttendance.length;
@@ -2189,7 +2426,7 @@
             // Since we have ALL data in `allData`, we can calculate client side easily!
 
             // 1. Past Earnings
-            const pastAtt = allData.attendance.filter(a => a.employeeId === currentEmployee.id && a.date < `${month}-01`);
+            const pastAtt = allData.attendance.filter(a => String(a.employeeId) === String(currentEmployee.id) && a.date < `${month}-01`);
             let pastEarnings = 0;
 
 
@@ -2211,14 +2448,14 @@
 
             // 2. Past Advances
             const pastAdv = allData.advances.filter(a => {
-                if (a.employeeId !== currentEmployee.id) return false;
+                if (String(a.employeeId) !== String(currentEmployee.id)) return false;
                 const dedMonth = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
                 return dedMonth < month;
             });
             const pastDeductions = pastAdv.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
 
             // 3. Past Payments
-            const pastPay = allData.payments.filter(p => p.employeeId === currentEmployee.id && p.salaryMonth < month);
+            const pastPay = allData.payments.filter(p => String(p.employeeId) === String(currentEmployee.id) && p.salaryMonth < month);
             const pastPaid = pastPay.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
             previousBalance = Math.round(pastEarnings - pastDeductions - pastPaid);
@@ -2291,6 +2528,7 @@
             updatePaymentsTable(myPayments);
         }
 
+
         function calculateDayEarning(att) {
             const stdHours = (allData.settings && allData.settings.standardHours) ? parseFloat(allData.settings.standardHours) : 8.5;
             const slabHours = (allData.settings && allData.settings.slabHours) ? parseFloat(allData.settings.slabHours) : 6;
@@ -2315,7 +2553,8 @@
 
         function formatDateWithDay(dateString) {
             if (!dateString) return '';
-            const dateObj = new Date(dateString);
+            // Use T00:00:00 to force local-time parsing (avoids UTC offset showing wrong day in IST)
+            const dateObj = new Date(dateString + 'T00:00:00');
             const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
             return `${dateString} (${dayNames[dateObj.getDay()]})`;
         }

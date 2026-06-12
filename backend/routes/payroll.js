@@ -17,17 +17,20 @@ router.get('/', async (req, res) => {
         const slabBase = parseFloat(settingsData.slabHours || 6);
 
         const payroll = employees.map(emp => {
+            const isSupervisor = emp.employee_type === 'fixed_salary';
+            const fixedMonthlySalary = parseFloat(emp.salary) || 0;
+
             const empAtt = attendance.filter(a =>
-                a.employeeId === emp.id && a.date.startsWith(month)
+                String(a.employeeId) === String(emp.id) && a.date.startsWith(month)
             );
 
             const empAdv = advances.filter(a => {
-                if (a.employeeId !== emp.id) return false;
+                if (String(a.employeeId) !== String(emp.id)) return false;
                 const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
                 return deduct === month;
             });
 
-            const empPay = payments.filter(p => p.employeeId === emp.id && p.salaryMonth === month);
+            const empPay = payments.filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth === month);
             const totalPaid = empPay.reduce((sum, p) => sum + p.amount, 0);
 
             empPay.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -36,75 +39,124 @@ router.get('/', async (req, res) => {
 
             let totalSalary = 0;
             let totalFare = 0;
-            let daysWorked = empAtt.length;
+            let daysWorked = 0;
 
-            empAtt.forEach(att => {
-                let dailySalary = 0;
-                const workedHours = parseFloat(att.workedHours);
-                if (isNaN(workedHours)) return;
+            if (isSupervisor) {
+                // Fixed salary supervisor: always earns fixed monthly salary regardless of attendance
+                totalSalary = fixedMonthlySalary;
+                totalFare = parseFloat(emp.monthly_fare) || 0; // Monthly fare added to payroll
+                daysWorked = null; // N/A for supervisors
+            } else {
+                daysWorked = empAtt.length;
+                empAtt.forEach(att => {
+                    let dailySalary = 0;
+                    const workedHours = parseFloat(att.workedHours);
+                    if (isNaN(workedHours)) return;
 
-                const salary = parseFloat(emp.salary);
-                const normalRate = salary / stdHours;
+                    const salary = parseFloat(emp.salary);
+                    const normalRate = salary / stdHours;
 
-                if (att.sundayMode) {
-                    dailySalary = salary;
-                } else if (att.slabMode) {
-                    if (workedHours > stdHours) {
-                        const extraHours = workedHours - stdHours;
-                        const slabRate = salary / slabBase;
-                        dailySalary = (normalRate * stdHours) + (slabRate * extraHours);
+                    if (att.sundayMode) {
+                        dailySalary = salary;
+                    } else if (att.slabMode) {
+                        if (workedHours > stdHours) {
+                            const extraHours = workedHours - stdHours;
+                            const slabRate = salary / slabBase;
+                            dailySalary = (normalRate * stdHours) + (slabRate * extraHours);
+                        } else {
+                            dailySalary = normalRate * workedHours;
+                        }
                     } else {
                         dailySalary = normalRate * workedHours;
                     }
-                } else {
-                    dailySalary = normalRate * workedHours;
-                }
 
-                totalSalary += dailySalary;
-                totalFare += (parseFloat(att.fare) || 0);
-            });
+                    totalSalary += dailySalary;
+                    totalFare += (parseFloat(att.fare) || 0);
+                });
+            }
 
             const totalAdvance = empAdv.reduce((sum, adv) => sum + (parseFloat(adv.amount) || 0), 0);
 
+            // --- Previous Balance Calculation ---
             let previousBalance = 0;
-            const pastAtt = attendance.filter(a => a.employeeId === emp.id && a.date < `${month}-01`);
-            let pastEarnings = 0;
-            pastAtt.forEach(att => {
-                let dailySalary = 0;
-                const workedHours = parseFloat(att.workedHours);
-                if (isNaN(workedHours)) return;
 
-                const salary = parseFloat(emp.salary);
-                const normalRate = salary / stdHours;
+            if (isSupervisor) {
+                // For supervisors: count past months they were active (based on payment history or advances)
+                // Get all past salary months from payments
+                const pastPayMonths = new Set(
+                    payments
+                        .filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth < month)
+                        .map(p => p.salaryMonth)
+                );
+                // Also include months where advances were deducted
+                advances
+                    .filter(a => {
+                        if (String(a.employeeId) !== String(emp.id)) return false;
+                        const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
+                        return deduct < month;
+                    })
+                    .forEach(a => {
+                        const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
+                        pastPayMonths.add(deduct);
+                    });
 
-                if (att.sundayMode) {
-                    dailySalary = salary;
-                } else if (att.slabMode) {
-                    if (workedHours > stdHours) {
-                        const extraHours = workedHours - stdHours;
-                        const slabRate = salary / slabBase;
-                        dailySalary = (normalRate * stdHours) + (slabRate * extraHours);
+                const pastMonthsCount = pastPayMonths.size;
+                const monthlyTotal = fixedMonthlySalary + (parseFloat(emp.monthly_fare) || 0);
+                const pastEarningsSupervisor = monthlyTotal * pastMonthsCount;
+
+                const pastDeductionsSupervisor = advances
+                    .filter(a => {
+                        if (String(a.employeeId) !== String(emp.id)) return false;
+                        const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
+                        return deduct < month;
+                    })
+                    .reduce((sum, adv) => sum + (parseFloat(adv.amount) || 0), 0);
+
+                const pastPaymentsSupervisor = payments
+                    .filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth < month)
+                    .reduce((sum, p) => sum + p.amount, 0);
+
+                previousBalance = Math.round(pastEarningsSupervisor - pastDeductionsSupervisor - pastPaymentsSupervisor);
+            } else {
+                const pastAtt = attendance.filter(a => String(a.employeeId) === String(emp.id) && a.date < `${month}-01`);
+                let pastEarnings = 0;
+                pastAtt.forEach(att => {
+                    let dailySalary = 0;
+                    const workedHours = parseFloat(att.workedHours);
+                    if (isNaN(workedHours)) return;
+
+                    const salary = parseFloat(emp.salary);
+                    const normalRate = salary / stdHours;
+
+                    if (att.sundayMode) {
+                        dailySalary = salary;
+                    } else if (att.slabMode) {
+                        if (workedHours > stdHours) {
+                            const extraHours = workedHours - stdHours;
+                            const slabRate = salary / slabBase;
+                            dailySalary = (normalRate * stdHours) + (slabRate * extraHours);
+                        } else {
+                            dailySalary = normalRate * workedHours;
+                        }
                     } else {
                         dailySalary = normalRate * workedHours;
                     }
-                } else {
-                    dailySalary = normalRate * workedHours;
-                }
-                pastEarnings += dailySalary;
-                pastEarnings += (parseFloat(att.fare) || 0);
-            });
+                    pastEarnings += dailySalary;
+                    pastEarnings += (parseFloat(att.fare) || 0);
+                });
 
-            const pastAdv = advances.filter(a => {
-                if (a.employeeId !== emp.id) return false;
-                const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
-                return deduct < month;
-            });
-            const pastDeductions = pastAdv.reduce((sum, adv) => sum + (parseFloat(adv.amount) || 0), 0);
+                const pastAdv = advances.filter(a => {
+                    if (String(a.employeeId) !== String(emp.id)) return false;
+                    const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
+                    return deduct < month;
+                });
+                const pastDeductions = pastAdv.reduce((sum, adv) => sum + (parseFloat(adv.amount) || 0), 0);
 
-            const pastPay = payments.filter(p => p.employeeId === emp.id && p.salaryMonth < month);
-            const pastPaymentsTotal = pastPay.reduce((sum, p) => sum + p.amount, 0);
+                const pastPay = payments.filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth < month);
+                const pastPaymentsTotal = pastPay.reduce((sum, p) => sum + p.amount, 0);
 
-            previousBalance = Math.round(pastEarnings - pastDeductions - pastPaymentsTotal);
+                previousBalance = Math.round(pastEarnings - pastDeductions - pastPaymentsTotal);
+            }
 
             const currentMonthNet = totalSalary + totalFare - totalAdvance;
             const netPayable = Math.round(currentMonthNet + previousBalance);
@@ -112,6 +164,7 @@ router.get('/', async (req, res) => {
 
             return {
                 employee: emp,
+                isSupervisor,
                 daysWorked,
                 salaryEarned: Math.round(totalSalary),
                 fareTotal: totalFare,
