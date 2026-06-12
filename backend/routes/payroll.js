@@ -21,16 +21,16 @@ router.get('/', async (req, res) => {
             const fixedMonthlySalary = parseFloat(emp.salary) || 0;
 
             const empAtt = attendance.filter(a =>
-                a.employeeId === emp.id && a.date.startsWith(month)
+                String(a.employeeId) === String(emp.id) && a.date.startsWith(month)
             );
 
             const empAdv = advances.filter(a => {
-                if (a.employeeId !== emp.id) return false;
+                if (String(a.employeeId) !== String(emp.id)) return false;
                 const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
                 return deduct === month;
             });
 
-            const empPay = payments.filter(p => p.employeeId === emp.id && p.salaryMonth === month);
+            const empPay = payments.filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth === month);
             const totalPaid = empPay.reduce((sum, p) => sum + p.amount, 0);
 
             empPay.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -85,13 +85,13 @@ router.get('/', async (req, res) => {
                 // Get all past salary months from payments
                 const pastPayMonths = new Set(
                     payments
-                        .filter(p => p.employeeId === emp.id && p.salaryMonth < month)
+                        .filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth < month)
                         .map(p => p.salaryMonth)
                 );
                 // Also include months where advances were deducted
                 advances
                     .filter(a => {
-                        if (a.employeeId !== emp.id) return false;
+                        if (String(a.employeeId) !== String(emp.id)) return false;
                         const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
                         return deduct < month;
                     })
@@ -106,19 +106,19 @@ router.get('/', async (req, res) => {
 
                 const pastDeductionsSupervisor = advances
                     .filter(a => {
-                        if (a.employeeId !== emp.id) return false;
+                        if (String(a.employeeId) !== String(emp.id)) return false;
                         const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
                         return deduct < month;
                     })
                     .reduce((sum, adv) => sum + (parseFloat(adv.amount) || 0), 0);
 
                 const pastPaymentsSupervisor = payments
-                    .filter(p => p.employeeId === emp.id && p.salaryMonth < month)
+                    .filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth < month)
                     .reduce((sum, p) => sum + p.amount, 0);
 
                 previousBalance = Math.round(pastEarningsSupervisor - pastDeductionsSupervisor - pastPaymentsSupervisor);
             } else {
-                const pastAtt = attendance.filter(a => a.employeeId === emp.id && a.date < `${month}-01`);
+                const pastAtt = attendance.filter(a => String(a.employeeId) === String(emp.id) && a.date < `${month}-01`);
                 let pastEarnings = 0;
                 pastAtt.forEach(att => {
                     let dailySalary = 0;
@@ -146,13 +146,13 @@ router.get('/', async (req, res) => {
                 });
 
                 const pastAdv = advances.filter(a => {
-                    if (a.employeeId !== emp.id) return false;
+                    if (String(a.employeeId) !== String(emp.id)) return false;
                     const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
                     return deduct < month;
                 });
                 const pastDeductions = pastAdv.reduce((sum, adv) => sum + (parseFloat(adv.amount) || 0), 0);
 
-                const pastPay = payments.filter(p => p.employeeId === emp.id && p.salaryMonth < month);
+                const pastPay = payments.filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth < month);
                 const pastPaymentsTotal = pastPay.reduce((sum, p) => sum + p.amount, 0);
 
                 previousBalance = Math.round(pastEarnings - pastDeductions - pastPaymentsTotal);

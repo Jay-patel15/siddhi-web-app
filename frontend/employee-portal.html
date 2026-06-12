@@ -1099,7 +1099,7 @@
                         onchange="handleFallbackCapture(event)">
 
                     <div id="camera-section" class="camera-container">
-                        <video id="camera-video" autoplay playsinline></video>
+                        <video id="camera-video" autoplay playsinline muted></video>
                         <canvas id="camera-canvas"></canvas>
                         <div class="camera-overlay">
                             <div
@@ -1393,6 +1393,37 @@
         let pendingAttendance = null;
         let videoStream = null;
         let attendanceTimerInterval = null;
+
+        // Retry fetch for transient Supabase/PgBouncer errors
+        async function retryFetch(url, options, maxRetries = 3, delayMs = 2000) {
+            let lastErr;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const res = await fetch(url, options);
+                    if (res.ok) return res;
+                    // Try to read error body
+                    let errData = {};
+                    try { errData = await res.clone().json(); } catch(_) {}
+                    const msg = errData.error || '';
+                    // Only retry on PgBouncer/transient server errors
+                    const isTransient = res.status >= 500 || msg.includes('schema_migrations') || msg.includes('connection') || msg.includes('timeout');
+                    if (isTransient && i < maxRetries - 1) {
+                        console.warn(`⚠️ Transient error (attempt ${i+1}/${maxRetries}): ${msg}. Retrying in ${delayMs}ms...`);
+                        await new Promise(r => setTimeout(r, delayMs));
+                        continue;
+                    }
+                    // Non-transient or last retry — return the bad response so caller can handle
+                    return res;
+                } catch (err) {
+                    lastErr = err;
+                    if (i < maxRetries - 1) {
+                        console.warn(`⚠️ Network error (attempt ${i+1}/${maxRetries}): ${err.message}. Retrying...`);
+                        await new Promise(r => setTimeout(r, delayMs));
+                    }
+                }
+            }
+            throw lastErr || new Error('Request failed after retries');
+        }
 
         // Check session on load
         window.onload = async function () {
@@ -1689,9 +1720,16 @@
 
             statusMsg.innerHTML = "Initializing...";
             statusMsg.className = "status-msg info"; statusMsg.style.display = 'block';
-            camSection.style.display = 'block'; hint.style.display = 'block';
-            captureBtn.style.display = 'flex'; captureBtn.disabled = true;
+            
+            // Hide camera container and show starting text initially
+            camSection.style.display = 'none'; 
+            hint.style.display = 'none';
+            captureBtn.style.display = 'flex'; 
+            captureBtn.disabled = true;
             captureBtn.innerHTML = "⏳ Starting Camera...";
+            
+            // Restore default handleAttendanceAction binding
+            captureBtn.onclick = handleAttendanceAction;
             document.getElementById('btn-check-in').disabled = true;
             document.getElementById('btn-check-out').disabled = true;
 
@@ -1702,32 +1740,59 @@
             // Prepare state tracking
             pendingAttendance = { type, location: null };
 
+            let cameraSucceeded = false;
+            let cameraError = null;
+
+            // 1. Start Camera
             try {
-                // 1. Start Camera Immediately
-                const cameraPromise = initCamera();
+                await initCamera();
+                cameraSucceeded = true;
+                camSection.style.display = 'block';
+                hint.style.display = 'block';
+            } catch (err) {
+                console.warn("Camera init failed:", err);
+                cameraError = err;
+            }
 
-                // 2. Fetch Location in Background
-                const locationPromise = getLocation().then(loc => {
-                    pendingAttendance.location = loc;
-                    securityAccuracy.innerHTML = `found (${Math.round(loc.accuracy)}m)`;
-                    securityAccuracy.style.color = '#10b981'; // Green
-                }).catch(err => {
-                    console.warn("Location error:", err);
-                    securityAccuracy.innerHTML = "Please turn on your Location 📍";
-                    securityAccuracy.style.color = 'var(--danger)';
-                    throw new Error("Location is required. Please turn on your device's GPS and try again.");
-                });
+            // 2. Fetch Location in background (do not let location errors crash the camera stream)
+            const locationPromise = getLocation().then(loc => {
+                pendingAttendance.location = loc;
+                securityAccuracy.innerHTML = `found (${Math.round(loc.accuracy)}m)`;
+                securityAccuracy.style.color = '#10b981'; // Green
+                return loc;
+            }).catch(err => {
+                console.warn("Location error:", err);
+                securityAccuracy.innerHTML = "Please turn on your Location 📍";
+                securityAccuracy.style.color = 'var(--danger)';
+                return null;
+            });
 
-                // Wait for BOTH camera and location to be ready
-                await Promise.all([cameraPromise, locationPromise]);
-
-                captureBtn.disabled = false;
+            if (cameraSucceeded) {
                 captureBtn.innerHTML = "📸 Capture & Save";
                 statusMsg.innerHTML = "📸 Ready to Capture";
-
-            } catch (err) {
-                stopCamera(); camSection.style.display = 'none';
-                statusMsg.innerHTML = err.message; statusMsg.className = "status-msg error";
+                
+                // Wait briefly for location to try to resolve immediately before enabling
+                await Promise.race([
+                    locationPromise,
+                    new Promise(r => setTimeout(r, 2000))
+                ]);
+                captureBtn.disabled = false;
+            } else {
+                // Camera stream failed to start (e.g. insecure HTTP context on mobile)
+                stopCamera();
+                camSection.style.display = 'none';
+                hint.style.display = 'none';
+                
+                const errMsg = cameraError ? (cameraError.message || cameraError) : "Camera not supported or permission denied";
+                statusMsg.innerHTML = `${errMsg}<br><small style="color:var(--gray)">Direct camera failed. Click below to use native camera fallback.</small>`;
+                statusMsg.className = "status-msg error";
+                
+                if (captureBtn) {
+                    captureBtn.style.display = 'flex';
+                    captureBtn.disabled = false;
+                    captureBtn.innerHTML = "📸 Use Native Camera (Fallback)";
+                    captureBtn.onclick = () => document.getElementById('fallback-camera').click();
+                }
                 updateAttendanceButtons();
             }
         }
@@ -1758,6 +1823,7 @@
 
                 if (type === 'in') {
                     // Step 1: Save attendance record (without base64 — photo uploaded separately)
+                    statusFull.innerHTML = "⏳ Step 1/2: Saving check-in...";
                     const att = {
                         date: dateStr,
                         employeeId: String(currentEmployee.id),
@@ -1767,12 +1833,13 @@
                         slabMode: false,
                         securityFlag: location && location.isMocked ? 'MOCKED_LOCATION' : 'SECURE'
                     };
-                    res = await fetch(`${API_URL}/api/attendance`, {
+                    // Use retryFetch to handle PgBouncer/transient errors automatically
+                    res = await retryFetch(`${API_URL}/api/attendance`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(att)
                     });
                     if (!res.ok) {
-                        let errMsg = "Server error saving attendance";
+                        let errMsg = "Server error saving check-in. Please try again.";
                         try { const errData = await res.json(); errMsg = errData.error || errMsg; } catch (_) {}
                         throw new Error(errMsg);
                     }
@@ -1783,14 +1850,14 @@
 
                     // Step 2: Upload photo to Supabase Storage
                     if (base64Image) {
-                        statusFull.innerHTML = "📤 Uploading photo...";
+                        statusFull.innerHTML = "📤 Step 2/2: Uploading photo...";
                         const overlay = document.getElementById('upload-overlay');
                         const previewImg = document.getElementById('upload-preview-img');
                         if (overlay && previewImg) {
                             previewImg.src = base64Image;
                             overlay.style.display = 'flex';
                         }
-                        const photoRes = await fetch(`${API_URL}/api/attendance/upload-photo`, {
+                        const photoRes = await retryFetch(`${API_URL}/api/attendance/upload-photo`, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 attendanceId: savedRecord.id,
@@ -1804,13 +1871,13 @@
                         if (!photoRes.ok) {
                             const errData = await photoRes.json().catch(() => ({}));
                             console.warn('Check-in photo upload failed:', errData);
-                            // Attendance is saved — just warn about the photo
-                            statusFull.innerHTML = `⚠️ Attendance saved, but photo could not be uploaded. Please try check-in again.`;
-                            statusFull.className = 'status-msg error';
+                            // Attendance is saved — just warn about the photo, don't fail the whole flow
+                            statusFull.innerHTML = `✅ Check-in saved at ${timeStr}! (Photo upload failed — check-in is still recorded)`;
+                            statusFull.className = 'status-msg warning';
                             stopCamera();
                             document.getElementById('camera-section').style.display = 'none';
                             captureBtn.style.display = 'none';
-                            await loadEmployeeData(currentEmployee.id);
+                            setTimeout(() => { window.location.reload(); }, 2500);
                             return;
                         }
                     }
@@ -1839,31 +1906,33 @@
                     const workedHours = ((timeOutDate - timeInDate) / (1000 * 60 * 60)).toFixed(2);
 
                     // Step 1: Update attendance record with timeOut and location (no base64)
+                    statusFull.innerHTML = "⏳ Step 1/2: Saving check-out time...";
                     const updateData = {
                         timeOut: timeStr, workedHours,
                         checkOutLoc: location ? { lat: location.lat, lng: location.lng, accuracy: location.accuracy } : null,
                         securityFlag: location && location.isMocked ? 'MOCKED_LOCATION' : 'SECURE'
                     };
-                    res = await fetch(`${API_URL}/api/attendance/${openRecord.id}`, {
+                    // Use retryFetch to handle PgBouncer/transient errors automatically
+                    res = await retryFetch(`${API_URL}/api/attendance/${openRecord.id}`, {
                         method: 'PUT', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(updateData)
                     });
                     if (!res.ok) {
-                        let errMsg = "Server error saving checkout";
+                        let errMsg = "Server error saving check-out. Please try again.";
                         try { const errData = await res.json(); errMsg = errData.error || errMsg; } catch (_) {}
                         throw new Error(errMsg);
                     }
 
                     // Step 2: Upload check-out photo
                     if (base64Image) {
-                        statusFull.innerHTML = "📤 Uploading photo...";
+                        statusFull.innerHTML = "📤 Step 2/2: Uploading photo...";
                         const overlay = document.getElementById('upload-overlay');
                         const previewImg = document.getElementById('upload-preview-img');
                         if (overlay && previewImg) {
                             previewImg.src = base64Image;
                             overlay.style.display = 'flex';
                         }
-                        const photoRes = await fetch(`${API_URL}/api/attendance/upload-photo`, {
+                        const photoRes = await retryFetch(`${API_URL}/api/attendance/upload-photo`, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 attendanceId: openRecord.id,
@@ -1877,13 +1946,13 @@
                         if (!photoRes.ok) {
                             const errData = await photoRes.json().catch(() => ({}));
                             console.warn('Check-out photo upload failed:', errData);
-                            // Checkout time IS saved — just warn about the photo
-                            statusFull.innerHTML = `⚠️ Checkout saved (${timeStr}), but photo could not be uploaded. Please try again.`;
-                            statusFull.className = 'status-msg error';
+                            // Checkout time IS saved — just warn about the photo, don't fail the whole checkout
+                            statusFull.innerHTML = `✅ Check-out saved at ${timeStr}! (Photo upload failed — checkout is still recorded)`;
+                            statusFull.className = 'status-msg warning';
                             stopCamera();
                             document.getElementById('camera-section').style.display = 'none';
                             captureBtn.style.display = 'none';
-                            await loadEmployeeData(currentEmployee.id);
+                            setTimeout(() => { window.location.reload(); }, 2500);
                             return;
                         }
                     }
@@ -1894,7 +1963,7 @@
                 stopCamera();
                 document.getElementById('camera-section').style.display = 'none';
                 captureBtn.style.display = 'none';
-                await loadEmployeeData(currentEmployee.id);
+                setTimeout(() => { window.location.reload(); }, 1500);
             } catch (err) {
                 statusFull.innerHTML = `❌ Error: ${err.message}`;
                 statusFull.className = "status-msg error";
@@ -1918,6 +1987,25 @@
                 if (captureBtn) captureBtn.disabled = false;
                 return;
             }
+
+            // Retry location fetch if it's missing (e.g. if employee enabled location after opening page)
+            if (!pendingAttendance.location) {
+                const statusFull = document.getElementById('attendance-status');
+                statusFull.innerHTML = "⏳ Fetching location...";
+                statusFull.className = "status-msg info";
+                statusFull.style.display = 'block';
+                try {
+                    pendingAttendance.location = await getLocation();
+                    const securityAccuracy = document.getElementById('security-accuracy');
+                    if (securityAccuracy) {
+                        securityAccuracy.innerHTML = `found (${Math.round(pendingAttendance.location.accuracy)}m)`;
+                        securityAccuracy.style.color = '#10b981';
+                    }
+                } catch (err) {
+                    console.warn("Retry location fetch failed:", err);
+                }
+            }
+
             await submitAttendanceAction(pendingAttendance.type, pendingAttendance.location, base64);
         }
 
@@ -1927,6 +2015,22 @@
             const statusFull = document.getElementById('attendance-status');
             statusFull.innerHTML = "⏳ Processing image...";
             statusFull.style.display = 'block';
+
+            // Retry location fetch if missing
+            if (!pendingAttendance.location) {
+                try {
+                    statusFull.innerHTML = "⏳ Fetching location & processing image...";
+                    pendingAttendance.location = await getLocation();
+                    const securityAccuracy = document.getElementById('security-accuracy');
+                    if (securityAccuracy) {
+                        securityAccuracy.innerHTML = `found (${Math.round(pendingAttendance.location.accuracy)}m)`;
+                        securityAccuracy.style.color = '#10b981';
+                    }
+                } catch (err) {
+                    console.warn("Fallback location fetch failed:", err);
+                }
+            }
+
             const compressed = await compressImage(file);
             const reader = new FileReader();
             reader.onload = async (e) => {
@@ -2173,19 +2277,19 @@
 
             // Filter attendance for this employee and month
             const myAttendance = allData.attendance.filter(a =>
-                a.employeeId === currentEmployee.id && a.date.startsWith(month)
+                String(a.employeeId) === String(currentEmployee.id) && a.date.startsWith(month)
             ).sort((a, b) => a.date.localeCompare(b.date));
             console.log('My Attendance:', myAttendance);
 
             // Filter advances for this employee and month
             const myAdvances = allData.advances.filter(a =>
-                a.employeeId === currentEmployee.id &&
+                String(a.employeeId) === String(currentEmployee.id) &&
                 (a.date.startsWith(month) || a.deductionMonth === month)
             );
 
             // Filter payments for this employee and month
             const myPayments = allData.payments.filter(p =>
-                p.employeeId === currentEmployee.id &&
+                String(p.employeeId) === String(currentEmployee.id) &&
                 (p.date.startsWith(month) || p.salaryMonth === month)
             );
 
@@ -2202,10 +2306,10 @@
                     .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
                 // Past balance for supervisor (salary-based past months)
-                const pastPayFixed = allData.payments.filter(p => p.employeeId === currentEmployee.id && p.salaryMonth < month);
+                const pastPayFixed = allData.payments.filter(p => String(p.employeeId) === String(currentEmployee.id) && p.salaryMonth < month);
                 const pastPaidFixed = pastPayFixed.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
                 const pastAdvFixed = allData.advances.filter(a => {
-                    if (a.employeeId !== currentEmployee.id) return false;
+                    if (String(a.employeeId) !== String(currentEmployee.id)) return false;
                     const dedMonth = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
                     return dedMonth < month;
                 });
@@ -2213,7 +2317,7 @@
 
                 // Previous balance = past (salary+fare) earned - past advances - past payments
                 const pastMonthsSet = new Set([
-                    ...allData.payments.filter(p => p.employeeId === currentEmployee.id && p.salaryMonth < month).map(p => p.salaryMonth),
+                    ...allData.payments.filter(p => String(p.employeeId) === String(currentEmployee.id) && p.salaryMonth < month).map(p => p.salaryMonth),
                     ...pastAdvFixed.map(a => a.deductionMonth || (a.date ? a.date.substring(0, 7) : ''))
                 ]);
                 const pastBalance = Math.round((monthlyTotal * pastMonthsSet.size) - pastDeductionsFixed - pastPaidFixed);
@@ -2322,7 +2426,7 @@
             // Since we have ALL data in `allData`, we can calculate client side easily!
 
             // 1. Past Earnings
-            const pastAtt = allData.attendance.filter(a => a.employeeId === currentEmployee.id && a.date < `${month}-01`);
+            const pastAtt = allData.attendance.filter(a => String(a.employeeId) === String(currentEmployee.id) && a.date < `${month}-01`);
             let pastEarnings = 0;
 
 
@@ -2344,14 +2448,14 @@
 
             // 2. Past Advances
             const pastAdv = allData.advances.filter(a => {
-                if (a.employeeId !== currentEmployee.id) return false;
+                if (String(a.employeeId) !== String(currentEmployee.id)) return false;
                 const dedMonth = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
                 return dedMonth < month;
             });
             const pastDeductions = pastAdv.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
 
             // 3. Past Payments
-            const pastPay = allData.payments.filter(p => p.employeeId === currentEmployee.id && p.salaryMonth < month);
+            const pastPay = allData.payments.filter(p => String(p.employeeId) === String(currentEmployee.id) && p.salaryMonth < month);
             const pastPaid = pastPay.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
             previousBalance = Math.round(pastEarnings - pastDeductions - pastPaid);
@@ -2449,7 +2553,8 @@
 
         function formatDateWithDay(dateString) {
             if (!dateString) return '';
-            const dateObj = new Date(dateString);
+            // Use T00:00:00 to force local-time parsing (avoids UTC offset showing wrong day in IST)
+            const dateObj = new Date(dateString + 'T00:00:00');
             const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
             return `${dateString} (${dayNames[dateObj.getDay()]})`;
         }

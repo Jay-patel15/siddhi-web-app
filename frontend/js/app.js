@@ -1259,14 +1259,14 @@ async function downloadPayslipPDF() {
         // Fetch latest payments to ensure accuracy
         const payRes = await fetch(`${API_URL}/payments`);
         const allPayments = await payRes.json();
-        const payments = allPayments.filter(p => p.employeeId === empId && p.salaryMonth === month);
+        const payments = allPayments.filter(p => String(p.employeeId) === String(empId) && p.salaryMonth === month);
         const emp = currentModalEmployee;
 
         const cleanNum = (str) => parseFloat(String(str).replace(/[^0-9.-]+/g, '')) || 0;
 
         // --- 1. DATA CALCULATION ---
-        const att = attendanceData.filter(a => a.employeeId === empId && a.date.startsWith(month));
-        const adv = advancesData.filter(a => a.employeeId === empId && (a.deductionMonth || a.date.substring(0, 7)) === month);
+        const att = attendanceData.filter(a => String(a.employeeId) === String(empId) && a.date.startsWith(month));
+        const adv = advancesData.filter(a => String(a.employeeId) === String(empId) && (a.deductionMonth || a.date.substring(0, 7)) === month);
 
         let basicPay = 0;
         let otPay = 0;
@@ -1312,7 +1312,7 @@ async function downloadPayslipPDF() {
         try {
             const payrollRes = await fetch(`${API_URL}/payroll?month=${month}`);
             const payrollList = await payrollRes.json();
-            const empPayroll = payrollList.find(p => p.employee.id === empId);
+            const empPayroll = payrollList.find(p => String(p.employee.id) === String(empId));
             if (empPayroll) {
                 previousBalance = empPayroll.previousBalance || 0;
             }
@@ -1679,9 +1679,9 @@ async function updateModalData() {
     const allPayments = paymentsData;
 
     // Filter Data for Specific Employee and Month
-    const att = allAttendance.filter(a => a.employeeId === emp.id && a.date.startsWith(month));
-    const adv = allAdvances.filter(a => a.employeeId === emp.id && (a.deductionMonth || a.date.substring(0, 7)) === month);
-    const payments = allPayments.filter(p => p.employeeId === emp.id && p.salaryMonth === month);
+    const att = allAttendance.filter(a => String(a.employeeId) === String(emp.id) && a.date.startsWith(month));
+    const adv = allAdvances.filter(a => String(a.employeeId) === String(emp.id) && (a.deductionMonth || a.date.substring(0, 7)) === month);
+    const payments = allPayments.filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth === month);
 
     // Calculate Stats
     const isSupervisorUpdate = emp.employee_type === 'fixed_salary';
@@ -1788,7 +1788,7 @@ async function updateModalData() {
     try {
         const payrollRes = await fetch(`${API_URL}/payroll?month=${month}`);
         const payrollList = await payrollRes.json();
-        const empPayroll = payrollList.find(p => p.employee.id === emp.id);
+        const empPayroll = payrollList.find(p => String(p.employee.id) === String(emp.id));
         if (empPayroll) {
             previousBalance = empPayroll.previousBalance || 0;
         }
@@ -2136,114 +2136,141 @@ async function loadAttendanceTable() {
         return loadAttendanceTable();
     }
 
-    const [attRes, empRes] = await Promise.all([
-        fetch(`${API_URL}/attendance`),
-        fetch(`${API_URL}/employees`)
-    ]);
-    attendanceData = await attRes.json();
-    const employees = await empRes.json();
-    const empMap = Object.fromEntries(employees.map(e => [e.id, e]));
-
     const tbody = document.getElementById('attendance-table-body');
-    tbody.innerHTML = '';
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--gray);padding:1.5rem;">⏳ Loading...</td></tr>';
 
-    const empFilter = document.getElementById('att-filter-employee') ? document.getElementById('att-filter-employee').value : '';
+    try {
+        const [attRes, empRes] = await Promise.all([
+            fetch(`${API_URL}/attendance`),
+            fetch(`${API_URL}/employees`)
+        ]);
 
-    const filtered = attendanceData
-        .filter(a => monthInput ? a.date.startsWith(monthInput) : a.date === dateInput)
-        .filter(a => !empFilter || a.employeeId == empFilter)
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
+        if (!attRes.ok || !empRes.ok) {
+            const errData = !attRes.ok ? await attRes.json().catch(() => ({})) : {};
+            throw new Error(errData.error || `Server error (${attRes.status}). Try again.`);
+        }
 
-    if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; color: var(--gray); padding: 2rem;">No attendance records found for this selection.</td></tr>';
-        return;
+        attendanceData = await attRes.json();
+        if (!Array.isArray(attendanceData)) throw new Error('Invalid data received from server.');
+
+        const employees = await empRes.json();
+        const empMap = Object.fromEntries((Array.isArray(employees) ? employees : []).map(e => [String(e.id), e]));
+
+        tbody.innerHTML = '';
+
+        const empFilter = document.getElementById('att-filter-employee') ? document.getElementById('att-filter-employee').value : '';
+
+        const filtered = attendanceData
+            .filter(a => monthInput ? a.date.startsWith(monthInput) : a.date === dateInput)
+            .filter(a => !empFilter || String(a.employeeId) === String(empFilter))
+            .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; color: var(--gray); padding: 2rem;">No attendance records found for this selection.</td></tr>';
+            return;
+        }
+
+        filtered.forEach(att => {
+            const emp = empMap[String(att.employeeId)];
+            const empName = emp ? emp.name : (att.employeeName || 'Unknown') + (emp === undefined ? ' (Deleted)' : '');
+            const defaultSalary = emp ? emp.salary : 0;
+
+            // FIX: Use T00:00:00 to force local-time parsing (avoids UTC offset shifting the day by 1 in IST)
+            const dateObj = new Date(att.date + 'T00:00:00');
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const formattedDate = `${att.date} (${dayNames[dateObj.getDay()]})`;
+
+            const workedHours = att.workedHours ? parseFloat(att.workedHours) : null;
+            const salary = parseFloat(defaultSalary);
+
+            // Use Global Settings
+            const normalRate = salary / globalSettings.standardHours;
+            let computedPay = 0;
+
+            if (workedHours !== null) {
+                if (att.sundayMode) {
+                    computedPay = salary;
+                } else if (att.slabMode && workedHours > globalSettings.standardHours) {
+                    const extraHours = workedHours - globalSettings.standardHours;
+                    const slabRate = salary / globalSettings.slabHours;
+                    computedPay = (normalRate * globalSettings.standardHours) + (slabRate * extraHours);
+                } else {
+                    computedPay = normalRate * workedHours;
+                }
+            }
+
+            const fare = parseFloat(att.fare || 0);
+            const total = computedPay + fare;
+
+            // Prepare Links HTML for IN
+            let inLinks = '';
+            if (att.checkInImage) {
+                inLinks += `<a href="#" onclick="showPreview('${att.checkInImage}', 'In Photo', '${att.date}', ''); return false;" style="color:var(--secondary); text-decoration:none; display: block; margin-bottom:2px; font-size:0.85em;">📷 View</a>`;
+            }
+            if (att.checkInLoc) {
+                let locObj = att.checkInLoc;
+                if (typeof locObj === 'string') { try { locObj = JSON.parse(locObj); } catch(e) {} }
+                const q = (locObj && locObj.lat) ? `${locObj.lat},${locObj.lng}` : String(att.checkInLoc);
+                inLinks += `<a href="https://maps.google.com/?q=${encodeURIComponent(q)}" target="_blank" style="color:var(--primary); text-decoration:none; display: block; font-size:0.85em;">📍 Map</a>`;
+            }
+            if (!inLinks) inLinks = '<span style="color:var(--gray); font-size:0.8em">None</span>';
+
+            // Prepare Links HTML for OUT
+            let outLinks = '-';
+            if (att.timeOut) {
+                outLinks = '';
+                if (att.checkOutImage) {
+                    outLinks += `<a href="#" onclick="showPreview('${att.checkOutImage}', 'Out Photo', '${att.date}', ''); return false;" style="color:var(--secondary); text-decoration:none; display: block; margin-bottom:2px; font-size:0.85em;">📷 View</a>`;
+                }
+                if (att.checkOutLoc) {
+                    let locObj = att.checkOutLoc;
+                    if (typeof locObj === 'string') { try { locObj = JSON.parse(locObj); } catch(e) {} }
+                    const q = (locObj && locObj.lat) ? `${locObj.lat},${locObj.lng}` : String(att.checkOutLoc);
+                    outLinks += `<a href="https://maps.google.com/?q=${encodeURIComponent(q)}" target="_blank" style="color:var(--primary); text-decoration:none; display: block; font-size:0.85em;">📍 Map</a>`;
+                }
+                if (!outLinks) outLinks = '<span style="color:var(--gray); font-size:0.8em">None</span>';
+            }
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td data-label="Date">${formattedDate}</td>
+                <td data-label="Employee" style="font-weight:500;">${empName}</td>
+                <td data-label="Time In"><span style="font-weight:600; color:var(--dark)">${formatTimeTo12h(att.timeIn)}</span></td>
+                <td data-label="In Links">${inLinks}</td>
+                <td data-label="Time Out"><span style="font-weight:600; color:var(--dark)">${att.timeOut ? formatTimeTo12h(att.timeOut) : '-'}</span></td>
+                <td data-label="Out Links">${outLinks}</td>
+                <td data-label="Hrs">${workedHours !== null ? workedHours.toFixed(2) + 'h' : '-'}
+                    ${att.slabMode && workedHours > globalSettings.standardHours ? '<span style="color:var(--warning); font-size: 0.8em"> (OT)</span>' : ''}
+                    ${att.sundayMode ? '<span style="color:var(--success); font-size: 0.8em"> (S)</span>' : ''}
+                </td>
+                <td data-label="Mode">
+                    <span style="padding: 2px 6px; border-radius: 4px; font-size: 0.75em; background: ${att.sundayMode ? '#fef08a; color: #854d0e' : (att.slabMode ? '#dcfce7; color: #166534' : '#e0e7ff; color: #3730a3')}">
+                        ${att.sundayMode ? 'Sunday' : (att.slabMode ? 'Slab' : 'Norm')}
+                    </span>
+                </td>
+                <td data-label="Salary">${workedHours !== null ? '₹' + Math.round(computedPay) : '-'}</td>
+                <td data-label="Fare">₹${fare}</td>
+                <td data-label="Total" style="font-weight: bold">${workedHours !== null ? '₹' + Math.round(total) : '₹' + Math.round(fare)}</td>
+                <td data-label="Action">
+                    <div class="action-buttons-stacked">
+                        <button class="btn" style="background: var(--warning); color: white; padding: 0.25rem 0.5rem;" onclick="editAttendance('${att.id}')">✏️</button>
+                        <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;" onclick="deleteAttendance('${att.id}')">🗑️</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+    } catch (err) {
+        console.error('loadAttendanceTable error:', err);
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:1.5rem;">
+            <div style="color:#b91c1c;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:1rem;">
+                <strong>⚠️ Failed to load records</strong><br>
+                <span style="font-size:0.85rem;">${err.message}</span><br>
+                <button class="btn btn-primary" style="margin-top:0.75rem;" onclick="loadAttendanceTable()">🔄 Retry</button>
+            </div>
+        </td></tr>`;
     }
-
-    filtered.forEach(att => {
-        const emp = empMap[att.employeeId];
-        const empName = emp ? emp.name : att.employeeName + ' (Deleted)';
-        const defaultSalary = emp ? emp.salary : 0;
-
-        const dateObj = new Date(att.date);
-        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const formattedDate = `${att.date} (${dayNames[dateObj.getDay()]})`;
-
-        const workedHours = att.workedHours ? parseFloat(att.workedHours) : null;
-        const salary = parseFloat(defaultSalary);
-
-        // Use Global Settings
-        const normalRate = salary / globalSettings.standardHours;
-        let computedPay = 0;
-
-        if (workedHours !== null) {
-            if (att.sundayMode) {
-                computedPay = salary;
-            } else if (att.slabMode && workedHours > globalSettings.standardHours) {
-                const extraHours = workedHours - globalSettings.standardHours;
-                const slabRate = salary / globalSettings.slabHours;
-                computedPay = (normalRate * globalSettings.standardHours) + (slabRate * extraHours);
-            } else {
-                computedPay = normalRate * workedHours;
-            }
-        }
-
-        const fare = parseFloat(att.fare || 0);
-        const total = computedPay + fare;
-
-        // Prepare Links HTML for IN
-        let inLinks = '';
-        if (att.checkInImage) {
-            inLinks += `<a href="#" onclick="showPreview('${att.checkInImage}', 'In Photo', '${att.date}', ''); return false;" style="color:var(--secondary); text-decoration:none; display: block; margin-bottom:2px; font-size:0.85em;">📷 View</a>`;
-        }
-        if (att.checkInLoc) {
-            let q = typeof att.checkInLoc === 'string' ? att.checkInLoc : `${att.checkInLoc.lat},${att.checkInLoc.lng}`;
-            inLinks += `<a href="https://maps.google.com/?q=${q}" target="_blank" style="color:var(--primary); text-decoration:none; display: block; font-size:0.85em;">📍 Map</a>`;
-        }
-        if (!inLinks) inLinks = '<span style="color:var(--gray); font-size:0.8em">None</span>';
-
-        // Prepare Links HTML for OUT
-        let outLinks = '-';
-        if (att.timeOut) {
-            outLinks = '';
-            if (att.checkOutImage) {
-                outLinks += `<a href="#" onclick="showPreview('${att.checkOutImage}', 'Out Photo', '${att.date}', ''); return false;" style="color:var(--secondary); text-decoration:none; display: block; margin-bottom:2px; font-size:0.85em;">📷 View</a>`;
-            }
-            if (att.checkOutLoc) {
-                let q = typeof att.checkOutLoc === 'string' ? att.checkOutLoc : `${att.checkOutLoc.lat},${att.checkOutLoc.lng}`;
-                outLinks += `<a href="https://maps.google.com/?q=${q}" target="_blank" style="color:var(--primary); text-decoration:none; display: block; font-size:0.85em;">📍 Map</a>`;
-            }
-            if (!outLinks) outLinks = '<span style="color:var(--gray); font-size:0.8em">None</span>';
-        }
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td data-label="Date">${formattedDate}</td>
-            <td data-label="Employee" style="font-weight:500;">${empName}</td>
-            <td data-label="Time In"><span style="font-weight:600; color:var(--dark)">${formatTimeTo12h(att.timeIn)}</span></td>
-            <td data-label="In Links">${inLinks}</td>
-            <td data-label="Time Out"><span style="font-weight:600; color:var(--dark)">${att.timeOut ? formatTimeTo12h(att.timeOut) : '-'}</span></td>
-            <td data-label="Out Links">${outLinks}</td>
-            <td data-label="Hrs">${workedHours !== null ? workedHours.toFixed(2) + 'h' : '-'}
-                ${att.slabMode && workedHours > globalSettings.standardHours ? '<span style="color:var(--warning); font-size: 0.8em"> (OT)</span>' : ''}
-                ${att.sundayMode ? '<span style="color:var(--success); font-size: 0.8em"> (S)</span>' : ''}
-            </td>
-            <td data-label="Mode">
-                <span style="padding: 2px 6px; border-radius: 4px; font-size: 0.75em; background: ${att.sundayMode ? '#fef08a; color: #854d0e' : (att.slabMode ? '#dcfce7; color: #166534' : '#e0e7ff; color: #3730a3')}">
-                    ${att.sundayMode ? 'Sunday' : (att.slabMode ? 'Slab' : 'Norm')}
-                </span>
-            </td>
-            <td data-label="Salary">${workedHours !== null ? '₹' + Math.round(computedPay) : '-'}</td>
-            <td data-label="Fare">₹${fare}</td>
-            <td data-label="Total" style="font-weight: bold">${workedHours !== null ? '₹' + Math.round(total) : '₹' + Math.round(fare)}</td>
-            <td data-label="Action">
-                <div class="action-buttons-stacked">
-                    <button class="btn" style="background: var(--warning); color: white; padding: 0.25rem 0.5rem;" onclick="editAttendance('${att.id}')">✏️</button>
-                    <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;" onclick="deleteAttendance('${att.id}')">🗑️</button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
 }
 
 function editAttendance(id) {
@@ -2882,9 +2909,9 @@ function exportToCSV() {
     }
 
     // Filter Data by Date Range
-    const empAtt = attendanceData.filter(a => a.employeeId === emp.id && a.date >= start && a.date <= end);
-    const empAdv = advancesData.filter(a => a.employeeId === emp.id && a.date >= start && a.date <= end);
-    const empPay = paymentsData.filter(p => p.employeeId === emp.id && p.date >= start && p.date <= end);
+    const empAtt = attendanceData.filter(a => String(a.employeeId) === String(emp.id) && a.date >= start && a.date <= end);
+    const empAdv = advancesData.filter(a => String(a.employeeId) === String(emp.id) && a.date >= start && a.date <= end);
+    const empPay = paymentsData.filter(p => String(p.employeeId) === String(emp.id) && p.date >= start && p.date <= end);
 
     // Calculate Totals
     let totalEarned = 0;
@@ -3107,7 +3134,7 @@ function openGalleryModal(employeeId, employeeName) {
     document.getElementById('delete-selected-btn').style.display = 'none';
 
     // Filter uploads for this employee
-    allGalleryImages = uploadsData.filter(u => u.employeeId === employeeId);
+    allGalleryImages = uploadsData.filter(u => String(u.employeeId) === String(employeeId));
 
     renderGalleryImages(allGalleryImages);
 
@@ -3389,7 +3416,9 @@ document.addEventListener('keydown', function (e) {
 // ========= DOWNLOAD SELECTED IMAGES =========
 
 async function downloadSelectedImages() {
-    if (selectedForDeletion.length === 0) {
+    const isAtt = !!_attGalleryMode;
+    const items = isAtt ? _attSelectedForDeletion : selectedForDeletion;
+    if (items.length === 0) {
         alert('No images selected');
         return;
     }
@@ -3403,22 +3432,30 @@ async function downloadSelectedImages() {
 
     try {
         // Download each selected image
-        for (const selected of selectedForDeletion) {
-            const img = allGalleryImages.find(i => i.id === selected.id && i.type === selected.type);
-            if (img) {
+        for (const selected of items) {
+            const url = isAtt ? selected.url : (allGalleryImages.find(i => i.id === selected.id && i.type === selected.type)?.screenshot);
+            const type = selected.type;
+            const date = isAtt 
+                ? (_attGalleryImages.find(i => i.attendanceId === selected.attendanceId && i.type === selected.type)?.date || '') 
+                : (allGalleryImages.find(i => i.id === selected.id && i.type === selected.type)?.date || '');
+            const amount = isAtt 
+                ? (_attGalleryImages.find(i => i.attendanceId === selected.attendanceId && i.type === selected.type)?.time || '') 
+                : (allGalleryImages.find(i => i.id === selected.id && i.type === selected.type)?.amount || '');
+
+            if (url) {
                 try {
-                    const response = await fetch(img.screenshot);
+                    const response = await fetch(url);
                     if (!response.ok) throw new Error('Network response was not ok');
                     const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
+                    const objectUrl = window.URL.createObjectURL(blob);
 
                     const link = document.createElement('a');
-                    link.href = url;
-                    link.download = `${img.type}_${img.date}_${img.amount}.jpg`;
+                    link.href = objectUrl;
+                    link.download = `${type}_${date}_${amount}.jpg`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                    window.URL.revokeObjectURL(url);
+                    window.URL.revokeObjectURL(objectUrl);
                 } catch (err) {
                     console.error("Failed to download image", err);
                 }
@@ -3447,13 +3484,13 @@ async function sharePayslipWhatsApp() {
     // Ensure we have latest payments (optional but good practice)
     const payRes = await fetch(`${API_URL}/payments`);
     const allPayments = await payRes.json();
-    const payments = allPayments.filter(p => p.employeeId === empId && p.salaryMonth === month);
+    const payments = allPayments.filter(p => String(p.employeeId) === String(empId) && p.salaryMonth === month);
 
     const emp = currentModalEmployee;
 
     // --- 1. DATA CALCULATION (Same as PDF) ---
-    const att = attendanceData.filter(a => a.employeeId === empId && a.date.startsWith(month));
-    const adv = advancesData.filter(a => a.employeeId === empId && (a.deductionMonth || a.date.substring(0, 7)) === month);
+    const att = attendanceData.filter(a => String(a.employeeId) === String(empId) && a.date.startsWith(month));
+    const adv = advancesData.filter(a => String(a.employeeId) === String(empId) && (a.deductionMonth || a.date.substring(0, 7)) === month);
 
     let basicPay = 0;
     let otPay = 0;

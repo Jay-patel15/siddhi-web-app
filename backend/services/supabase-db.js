@@ -123,9 +123,27 @@ const deleteEmployee = async (id) => {
 
 const getAllAttendance = async () => {
     return retry(async () => {
-        const { data, error } = await supabase.from('attendance').select('*');
-        if (error) throw new Error(error.message);
-        return data || [];
+        let allData = [];
+        let from = 0;
+        let to = 999;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabase.from('attendance').select('*').range(from, to);
+            if (error) throw new Error(error.message);
+            if (data && data.length > 0) {
+                allData = allData.concat(data);
+                if (data.length < 1000) {
+                    hasMore = false;
+                } else {
+                    from += 1000;
+                    to += 1000;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+        return allData;
     });
 };
 
@@ -160,11 +178,13 @@ const createAttendance = async (attendance) => {
 };
 
 const updateAttendance = async (id, attendance) => {
+    // Use higher base delay (1200ms) to give PgBouncer/schema_migrations time to recover.
+    // Checkout operations are the most user-visible, so we retry more patiently.
     return retry(async () => {
         const { data, error } = await supabase.from('attendance').update(attendance).eq('id', id).select().single();
         if (error) throw new Error(error.message);
         return data;
-    });
+    }, 5, 1200);
 };
 
 const deleteAttendance = async (id) => {
@@ -179,9 +199,27 @@ const deleteAttendance = async (id) => {
 
 const getAllAdvances = async () => {
     return retry(async () => {
-        const { data, error } = await supabase.from('advances').select('*');
-        if (error) throw new Error(error.message);
-        return data || [];
+        let allData = [];
+        let from = 0;
+        let to = 999;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabase.from('advances').select('*').range(from, to);
+            if (error) throw new Error(error.message);
+            if (data && data.length > 0) {
+                allData = allData.concat(data);
+                if (data.length < 1000) {
+                    hasMore = false;
+                } else {
+                    from += 1000;
+                    to += 1000;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+        return allData;
     });
 };
 
@@ -221,9 +259,27 @@ const deleteAdvance = async (id) => {
 
 const getAllPayments = async () => {
     return retry(async () => {
-        const { data, error } = await supabase.from('payments').select('*');
-        if (error) throw new Error(error.message);
-        return data || [];
+        let allData = [];
+        let from = 0;
+        let to = 999;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabase.from('payments').select('*').range(from, to);
+            if (error) throw new Error(error.message);
+            if (data && data.length > 0) {
+                allData = allData.concat(data);
+                if (data.length < 1000) {
+                    hasMore = false;
+                } else {
+                    from += 1000;
+                    to += 1000;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+        return allData;
     });
 };
 
