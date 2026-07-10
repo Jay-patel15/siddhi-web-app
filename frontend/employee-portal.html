@@ -1973,40 +1973,63 @@
 
 
         async function handleAttendanceAction() {
-            let base64;
-            try {
-                base64 = captureImage();
-            } catch (err) {
-                // captureImage() throws if the video frame isn't ready or is all black.
-                // Show the error and re-enable the button so the employee can try again.
-                const statusFull = document.getElementById('attendance-status');
-                const captureBtn = document.getElementById('btn-capture');
-                statusFull.innerHTML = `⚠️ ${err.message}`;
-                statusFull.className = 'status-msg error';
-                statusFull.style.display = 'block';
-                if (captureBtn) captureBtn.disabled = false;
-                return;
+            const captureBtn = document.getElementById('btn-capture');
+            if (captureBtn) {
+                if (captureBtn.disabled) return; // Prevent multiple execution
+                captureBtn.disabled = true;
+                captureBtn.innerHTML = "⏳ Processing...";
             }
 
-            // Retry location fetch if it's missing (e.g. if employee enabled location after opening page)
-            if (!pendingAttendance.location) {
-                const statusFull = document.getElementById('attendance-status');
-                statusFull.innerHTML = "⏳ Fetching location...";
-                statusFull.className = "status-msg info";
-                statusFull.style.display = 'block';
+            try {
+                let base64;
                 try {
-                    pendingAttendance.location = await getLocation();
-                    const securityAccuracy = document.getElementById('security-accuracy');
-                    if (securityAccuracy) {
-                        securityAccuracy.innerHTML = `found (${Math.round(pendingAttendance.location.accuracy)}m)`;
-                        securityAccuracy.style.color = '#10b981';
-                    }
+                    base64 = captureImage();
                 } catch (err) {
-                    console.warn("Retry location fetch failed:", err);
+                    // captureImage() throws if the video frame isn't ready or is all black.
+                    // Show the error and re-enable the button so the employee can try again.
+                    const statusFull = document.getElementById('attendance-status');
+                    statusFull.innerHTML = `⚠️ ${err.message}`;
+                    statusFull.className = 'status-msg error';
+                    statusFull.style.display = 'block';
+                    if (captureBtn) {
+                        captureBtn.disabled = false;
+                        captureBtn.innerHTML = "📸 Capture & Save";
+                    }
+                    return;
+                }
+
+                // Retry location fetch if it's missing (e.g. if employee enabled location after opening page)
+                if (!pendingAttendance.location) {
+                    const statusFull = document.getElementById('attendance-status');
+                    statusFull.innerHTML = "⏳ Fetching location...";
+                    statusFull.className = "status-msg info";
+                    statusFull.style.display = 'block';
+                    try {
+                        pendingAttendance.location = await getLocation();
+                        const securityAccuracy = document.getElementById('security-accuracy');
+                        if (securityAccuracy) {
+                            securityAccuracy.innerHTML = `found (${Math.round(pendingAttendance.location.accuracy)}m)`;
+                            securityAccuracy.style.color = '#10b981';
+                        }
+                    } catch (err) {
+                        console.warn("Retry location fetch failed:", err);
+                    }
+                }
+
+                await submitAttendanceAction(pendingAttendance.type, pendingAttendance.location, base64);
+            } catch (err) {
+                console.error("Attendance action error:", err);
+                const statusFull = document.getElementById('attendance-status');
+                if (statusFull) {
+                    statusFull.innerHTML = `❌ Error: ${err.message}`;
+                    statusFull.className = 'status-msg error';
+                    statusFull.style.display = 'block';
+                }
+                if (captureBtn) {
+                    captureBtn.disabled = false;
+                    captureBtn.innerHTML = "📸 Capture & Save";
                 }
             }
-
-            await submitAttendanceAction(pendingAttendance.type, pendingAttendance.location, base64);
         }
 
         async function handleFallbackCapture(event) {

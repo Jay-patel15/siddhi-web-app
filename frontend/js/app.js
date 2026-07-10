@@ -921,6 +921,13 @@ async function loadDashboard() {
     });
 
     employeesData.forEach(emp => {
+        if (emp.employee_type === 'fixed_salary') {
+            // Fixed salary employees earn their monthly salary + fare regardless of attendance
+            const fixedEarned = (parseFloat(emp.salary) || 0) + (parseFloat(emp.monthly_fare) || 0);
+            totalPayroll += Math.round(fixedEarned);
+            return;
+        }
+
         // O(1) lookup instead of O(M) filter
         const empAtt = monthlyAttByEmp.get(String(emp.id)) || [];
         let empEarned = 0;
@@ -956,6 +963,37 @@ async function loadDashboard() {
     // Same logic as backend payroll.js — past earnings - past deductions - past payments
     let totalPreviousBalance = 0;
     employeesData.forEach(emp => {
+        const pastAdv = advancesData.filter(a => {
+            if (String(a.employeeId) !== String(emp.id)) return false;
+            const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
+            return deduct < currentMonth;
+        });
+        const pastDeductions = pastAdv.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+
+        const pastPay = paymentsData.filter(p =>
+            String(p.employeeId) === String(emp.id) && p.salaryMonth < currentMonth
+        );
+        const pastPaymentsTotal = pastPay.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+        if (emp.employee_type === 'fixed_salary') {
+            // Fixed salary: count past months active (from payment history or advance deductions)
+            const pastPayMonths = new Set(
+                paymentsData
+                    .filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth < currentMonth)
+                    .map(p => p.salaryMonth)
+            );
+            pastAdv.forEach(a => {
+                const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
+                pastPayMonths.add(deduct);
+            });
+            const pastMonthsCount = pastPayMonths.size;
+            const monthlyTotal = (parseFloat(emp.salary) || 0) + (parseFloat(emp.monthly_fare) || 0);
+            const pastEarningsSupervisor = monthlyTotal * pastMonthsCount;
+
+            totalPreviousBalance += Math.round(pastEarningsSupervisor - pastDeductions - pastPaymentsTotal);
+            return;
+        }
+
         const pastAtt = attendanceData.filter(a =>
             String(a.employeeId) === String(emp.id) && a.date < `${currentMonth}-01`
         );
@@ -975,18 +1013,6 @@ async function loadDashboard() {
             }
             pastEarnings += (parseFloat(att.fare) || 0);
         });
-
-        const pastAdv = advancesData.filter(a => {
-            if (String(a.employeeId) !== String(emp.id)) return false;
-            const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
-            return deduct < currentMonth;
-        });
-        const pastDeductions = pastAdv.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
-
-        const pastPay = paymentsData.filter(p =>
-            String(p.employeeId) === String(emp.id) && p.salaryMonth < currentMonth
-        );
-        const pastPaymentsTotal = pastPay.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
         totalPreviousBalance += Math.round(pastEarnings - pastDeductions - pastPaymentsTotal);
     });
