@@ -59,6 +59,26 @@
         <div id="sections-container">
             <section id="dashboard" class="section active">
 
+                <!-- EARLY CHECK-IN RESTRICTION CARD -->
+                <div class="card early-checkin-card" id="early-checkin-card" style="margin-bottom:1.5rem; padding:1.25rem;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+                        <div style="display:flex; align-items:center; gap:1.25rem;">
+                            <label class="switch" style="flex-shrink:0;">
+                                <input type="checkbox" id="early-checkin-toggle" onchange="toggleEarlyCheckInRestriction(this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                            <div>
+                                <h3 id="early-checkin-status-label" style="margin:0; font-size:1rem; font-weight:700; color:var(--dark); display:flex; align-items:center; gap:0.5rem;">
+                                    ⏱️ Restrict Early Check-in (Before 9:00 AM)
+                                </h3>
+                                <p style="color:var(--gray); font-size:0.85rem; margin:0.25rem 0 0; line-height:1.4;">
+                                    When enabled, employees are prevented from checking in before 9:00 AM. The check-in button will be locked and will automatically activate at 9:00 AM.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card dashboard-controls" style="margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem;padding:1rem;">
                     <label style="font-weight:bold;white-space:nowrap;">Filter Dashboard Amounts:</label>
                     <input type="month" id="dashboard-month-filter" style="padding:0.5rem;border:1px solid #ccc;border-radius:4px;" onchange="loadDashboard()">

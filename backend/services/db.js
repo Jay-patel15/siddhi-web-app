@@ -315,6 +315,7 @@ const getSettings = () => {
     const row = db.prepare('SELECT * FROM settings WHERE id = 1').get();
     if (row) {
         row.maintenanceMode = Boolean(row.maintenanceMode);
+        row.restrictEarlyCheckIn = Boolean(row.restrictEarlyCheckIn);
     }
     return row;
 };
@@ -322,11 +323,12 @@ const getSettings = () => {
 const updateSettings = (settings) => {
     const stmt = db.prepare(`
         UPDATE settings 
-        SET standardHours = ?, slabHours = ?, maintenanceMode = ?
+        SET standardHours = ?, slabHours = ?, maintenanceMode = ?, restrictEarlyCheckIn = ?
         WHERE id = 1
     `);
     const isMaintenance = settings.maintenanceMode ? 1 : 0;
-    stmt.run(settings.standardHours, settings.slabHours, isMaintenance);
+    const isRestrict = settings.restrictEarlyCheckIn ? 1 : 0;
+    stmt.run(settings.standardHours, settings.slabHours, isMaintenance, isRestrict);
     return getSettings();
 };
 

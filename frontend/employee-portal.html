@@ -1391,8 +1391,8 @@
             settings: {}
         };
         let pendingAttendance = null;
-        let videoStream = null;
         let attendanceTimerInterval = null;
+        let earlyCheckInInterval = null;
 
         // Retry fetch for transient Supabase/PgBouncer errors
         async function retryFetch(url, options, maxRetries = 3, delayMs = 2000) {
@@ -1637,6 +1637,10 @@
             const mmEl = document.getElementById('timer-mm');
             const ssEl = document.getElementById('timer-ss');
             if (attendanceTimerInterval) clearInterval(attendanceTimerInterval);
+            if (earlyCheckInInterval) {
+                clearInterval(earlyCheckInInterval);
+                earlyCheckInInterval = null;
+            }
 
             if (openShift) {
                 // There is an ongoing shift that needs a checkout (could be from yesterday!)
@@ -1691,10 +1695,33 @@
             } else if (!todayRecord) {
                 // No open shift, and no record for today at all. Ready to start new day.
                 timerContainer.style.display = 'none';
-                btnIn.disabled = false; btnOut.disabled = true;
-                btnOut.style.display = 'none'; // hide until checked in
-                instr.innerText = "Check in to start your work today.";
-                btnIn.innerHTML = "🔒 Check In";
+
+                const isRestricted = allData.settings && allData.settings.restrictEarlyCheckIn;
+                const isBefore9 = now.getHours() < 9;
+
+                if (isRestricted && isBefore9) {
+                    btnIn.disabled = true;
+                    btnIn.style.opacity = '0.5';
+                    btnIn.style.cursor = 'not-allowed';
+                    btnOut.style.display = 'none'; // hide check out
+                    btnIn.innerHTML = "🔒 Locked (till 9:00 AM)";
+                    instr.innerText = "Early check-in is restricted. The check-in button will activate automatically at 9:00 AM.";
+
+                    // Schedule automatic unlock check
+                    earlyCheckInInterval = setInterval(() => {
+                        const checkNow = new Date();
+                        if (checkNow.getHours() >= 9) {
+                            clearInterval(earlyCheckInInterval);
+                            earlyCheckInInterval = null;
+                            updateAttendanceButtons();
+                        }
+                    }, 5000); // Check every 5 seconds
+                } else {
+                    btnIn.disabled = false; btnOut.disabled = true;
+                    btnOut.style.display = 'none'; // hide until checked in
+                    instr.innerText = "Check in to start your work today.";
+                    btnIn.innerHTML = "🔒 Check In";
+                }
             } else {
                 // Today's shift is fully complete (has both timeIn and timeOut)
                 timerContainer.style.display = 'none';

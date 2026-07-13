@@ -507,6 +507,22 @@ select:focus {
     margin-bottom: 1.5rem;
 }
 
+/* Early Check-in Card Custom Styles */
+.early-checkin-card {
+    transition: var(--transition);
+    border: 1.5px solid var(--gray);
+    background: var(--light);
+}
+
+.early-checkin-card.active-restriction {
+    border-color: var(--primary) !important;
+    background: rgba(99, 102, 241, 0.08) !important;
+}
+
+body.dark-mode .early-checkin-card.active-restriction {
+    background: rgba(99, 102, 241, 0.15) !important;
+}
+
 .switch {
     position: relative;
     display: inline-block;

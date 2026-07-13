@@ -323,13 +323,14 @@ const getSettings = async () => {
         if (error) {
             // If no settings found, return defaults (or create them)
             if (error.code === 'PGRST116') { // specific error for 0 rows
-                return { standardHours: 8.5, slabHours: 6, maintenanceMode: false };
+                return { standardHours: 8.5, slabHours: 6, maintenanceMode: false, restrictEarlyCheckIn: false };
             }
             throw new Error(error.message);
         }
-        const result = data || { standardHours: 8.5, slabHours: 6, maintenanceMode: false };
-        // Ensure maintenanceMode is always a proper boolean
+        const result = data || { standardHours: 8.5, slabHours: 6, maintenanceMode: false, restrictEarlyCheckIn: false };
+        // Ensure booleans are always proper booleans
         result.maintenanceMode = Boolean(result.maintenanceMode);
+        result.restrictEarlyCheckIn = Boolean(result.restrictEarlyCheckIn);
         return result;
     });
 };
@@ -340,11 +341,15 @@ const updateSettings = async (settings) => {
         const payload = {
             standardHours: settings.standardHours,
             slabHours: settings.slabHours,
-            maintenanceMode: settings.maintenanceMode !== undefined ? Boolean(settings.maintenanceMode) : false
+            maintenanceMode: settings.maintenanceMode !== undefined ? Boolean(settings.maintenanceMode) : false,
+            restrictEarlyCheckIn: settings.restrictEarlyCheckIn !== undefined ? Boolean(settings.restrictEarlyCheckIn) : false
         };
         const { data, error } = await supabase.from('settings').update(payload).eq('id', 1).select().single();
         if (error) throw new Error(error.message);
-        if (data) data.maintenanceMode = Boolean(data.maintenanceMode);
+        if (data) {
+            data.maintenanceMode = Boolean(data.maintenanceMode);
+            data.restrictEarlyCheckIn = Boolean(data.restrictEarlyCheckIn);
+        }
         return data;
     });
 };
