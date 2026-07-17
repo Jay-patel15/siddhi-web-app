@@ -3197,6 +3197,7 @@ function openGalleryModal(employeeId, employeeName) {
     document.getElementById('gallery-title').innerText = `📷 ${employeeName}'s Uploads`;
     document.getElementById('gallery-date-filter').value = '';
     document.getElementById('delete-selected-btn').style.display = 'none';
+    document.getElementById('select-all-btn').innerText = '☑️ Select All';
 
     // Filter uploads for this employee
     allGalleryImages = uploadsData.filter(u => String(u.employeeId) === String(employeeId));
@@ -3320,12 +3321,10 @@ async function confirmDelete() {
     document.getElementById('delete-confirm-modal').style.display = 'none';
 
     try {
-        // Delete all selected images
-        for (const item of selectedForDeletion) {
-            await fetch(`${API_URL}/uploads/${item.type}/${item.id}`, {
-                method: 'DELETE'
-            });
-        }
+        // Delete all selected images in parallel
+        await Promise.all(selectedForDeletion.map(item =>
+            fetch(`${API_URL}/uploads/${item.type}/${item.id}`, { method: 'DELETE' })
+        ));
 
         // Clear selection
         selectedForDeletion = [];
@@ -3835,6 +3834,7 @@ function openAttPhotoGallery(employeeId, employeeName) {
     document.getElementById('gallery-date-filter').value = '';
     document.getElementById('delete-selected-btn').style.display = 'none';
     document.getElementById('download-selected-btn').style.display = 'none';
+    document.getElementById('select-all-btn').innerText = '☑️ Select All';
 
     // get current month filter from the page
     const monthFilter = (document.getElementById('att-photo-month-filter')?.value || '').trim();
@@ -3939,17 +3939,21 @@ window.confirmDelete = async function () {
         if (deleteBtn) { deleteBtn.disabled = true; deleteBtn.innerText = '⏳ Deleting...'; }
 
         try {
+            const results = await Promise.all(itemsToDelete.map(item =>
+                fetch(`${API_URL}/attendance-photos/${item.attendanceId}/${item.type}`, { method: 'DELETE' })
+                    .then(res => ({ item, ok: res.ok }))
+                    .catch(() => ({ item, ok: false }))
+            ));
+
             let anyFailed = false;
-            for (const item of itemsToDelete) {
-                const res = await fetch(`${API_URL}/attendance-photos/${item.attendanceId}/${item.type}`, { method: 'DELETE' });
-                if (!res.ok) {
+            results.forEach(({ item, ok }) => {
+                if (!ok) {
                     console.error('Delete failed for', item.attendanceId, item.type);
                     anyFailed = true;
                 } else {
-                    // Remove from master photo list
                     _attPhotosAll = _attPhotosAll.filter(p => !(p.attendanceId === item.attendanceId && p.type === item.type));
                 }
-            }
+            });
 
             // Clear selection
             _attSelectedForDeletion = [];
@@ -3986,5 +3990,31 @@ window.closeGalleryModal = function () {
 
 window.loadAttendancePhotos = loadAttendancePhotos;
 window.openAttPhotoGallery = openAttPhotoGallery;
+
+function toggleSelectAllGalleryImages() {
+    const images = _attGalleryMode ? _attGalleryImages : allGalleryImages;
+    const wasAllSelected = (_attGalleryMode ? _attSelectedForDeletion.length : selectedForDeletion.length) === images.length && images.length > 0;
+
+    if (_attGalleryMode) {
+        _attSelectedForDeletion = wasAllSelected ? [] : images.map(p => ({ attendanceId: p.attendanceId, type: p.type, url: p.url }));
+        _renderAttGalleryImages(images);
+    } else {
+        selectedForDeletion = wasAllSelected ? [] : images.map(img => ({ type: img.type, id: img.id }));
+        renderGalleryImages(images);
+    }
+
+    const count = _attGalleryMode ? _attSelectedForDeletion.length : selectedForDeletion.length;
+    const deleteBtn = document.getElementById('delete-selected-btn');
+    const downloadBtn = document.getElementById('download-selected-btn');
+    deleteBtn.style.display = count > 0 ? 'block' : 'none';
+    downloadBtn.style.display = count > 0 ? 'block' : 'none';
+    if (count > 0) {
+        deleteBtn.innerText = `🗑️ Delete (${count})`;
+        downloadBtn.innerText = `⬇️ Download (${count})`;
+    }
+
+    document.getElementById('select-all-btn').innerText = wasAllSelected ? '☑️ Select All' : '⬜ Deselect All';
+}
+window.toggleSelectAllGalleryImages = toggleSelectAllGalleryImages;
 
 
