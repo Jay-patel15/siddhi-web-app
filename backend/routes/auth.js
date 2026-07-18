@@ -22,11 +22,13 @@ router.post('/login', async (req, res) => {
         try {
             const employees = await dbService.getAllEmployees();
             // Match either Name or ID or customId (case insensitive, string comparison) and Password
+            const enteredPassword = (password || '').toString().trim();
             const emp = employees.find(e => {
                 const nameMatch = e.name && e.name.toLowerCase() === loginUser.toLowerCase();
                 const idMatch = String(e.id) === loginUser;
                 const customIdMatch = String(e.customId) === loginUser;
-                return (nameMatch || idMatch || customIdMatch) && e.password === password;
+                const passwordMatch = (e.password || '').toString().trim() === enteredPassword;
+                return (nameMatch || idMatch || customIdMatch) && passwordMatch;
             });
 
             if (emp) {
