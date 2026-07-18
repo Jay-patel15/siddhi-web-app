@@ -24,7 +24,8 @@ router.post('/login', async (req, res) => {
             // Match either Name or ID or customId (case insensitive, string comparison) and Password
             const enteredPassword = (password || '').toString().trim();
             const emp = employees.find(e => {
-                const nameMatch = e.name && e.name.toLowerCase() === loginUser.toLowerCase();
+                const empName = (e.name || '').toString().trim();
+                const nameMatch = empName && empName.toLowerCase() === loginUser.toLowerCase();
                 const idMatch = String(e.id) === loginUser;
                 const customIdMatch = String(e.customId) === loginUser;
                 const passwordMatch = (e.password || '').toString().trim() === enteredPassword;
@@ -34,10 +35,11 @@ router.post('/login', async (req, res) => {
             if (emp) {
                 return res.json({ success: true, role: 'employee', name: emp.name, id: emp.id });
             }
+            return res.status(401).json({ error: 'Invalid employee credentials' });
         } catch (e) {
             console.error('Login DB Error:', e);
+            return res.status(500).json({ error: 'Server error during login: ' + e.message });
         }
-        return res.status(401).json({ error: 'Invalid employee credentials' });
     }
 
     res.status(400).json({ error: 'Invalid login type' });
