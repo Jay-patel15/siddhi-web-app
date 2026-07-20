@@ -4093,7 +4093,9 @@ async function exportMonthlyExpenseReportSettings() {
                 "Month", 
                 "Total Salary Earned (₹)", 
                 "Total Travel Fare (₹)", 
+                "Total Salary + Fare (₹)", 
                 "Total Advance (₹)", 
+                "Total Previous Balance (₹)", 
                 "Total Net Payable (₹)", 
                 "Total Paid Amount (₹)", 
                 "Total Remaining Due (₹)"
@@ -4103,6 +4105,7 @@ async function exportMonthlyExpenseReportSettings() {
         let grandSalary = 0;
         let grandFare = 0;
         let grandAdvance = 0;
+        let grandPrevBal = 0;
         let grandNet = 0;
         let grandPaid = 0;
         let grandDue = 0;
@@ -4116,6 +4119,7 @@ async function exportMonthlyExpenseReportSettings() {
             let totalSalary = 0;
             let totalFare = 0;
             let totalAdvance = 0;
+            let totalPrevBal = 0;
             let totalNet = 0;
             let totalPaid = 0;
             let totalDue = 0;
@@ -4124,6 +4128,7 @@ async function exportMonthlyExpenseReportSettings() {
                 const sal = p.salaryEarned || 0;
                 const fare = p.fareTotal || 0;
                 const adv = p.advancePaid || 0;
+                const prev = p.previousBalance || 0;
                 const net = p.finalPayable || 0;
                 const paid = p.paidTotal || 0;
                 const due = p.remainingDue !== undefined ? p.remainingDue : (net - paid);
@@ -4131,6 +4136,7 @@ async function exportMonthlyExpenseReportSettings() {
                 totalSalary += sal;
                 totalFare += fare;
                 totalAdvance += adv;
+                totalPrevBal += prev;
                 totalNet += net;
                 totalPaid += paid;
                 totalDue += due;
@@ -4139,16 +4145,19 @@ async function exportMonthlyExpenseReportSettings() {
             grandSalary += totalSalary;
             grandFare += totalFare;
             grandAdvance += totalAdvance;
-            grandNet += totalNet;
+            if (idx === 0) {
+                grandPrevBal = totalPrevBal;
+            }
             grandPaid += totalPaid;
-            grandDue += totalDue;
 
             summaryAoa.push([
                 idx + 1,
                 monthLabel,
                 totalSalary,
                 totalFare,
+                totalSalary + totalFare,
                 totalAdvance,
+                totalPrevBal,
                 totalNet,
                 totalPaid,
                 totalDue
@@ -4161,11 +4170,16 @@ async function exportMonthlyExpenseReportSettings() {
                 totalSalary,
                 totalFare,
                 totalAdvance,
+                totalPrevBal,
                 totalNet,
                 totalPaid,
                 totalDue
             });
         });
+
+        // Compute Grand Totals mathematically
+        grandNet = grandSalary + grandFare - grandAdvance + grandPrevBal;
+        grandDue = grandNet - grandPaid;
 
         // Append Summary Totals Row
         summaryAoa.push([
@@ -4173,7 +4187,9 @@ async function exportMonthlyExpenseReportSettings() {
             "GRAND TOTAL",
             grandSalary,
             grandFare,
+            grandSalary + grandFare,
             grandAdvance,
+            grandPrevBal,
             grandNet,
             grandPaid,
             grandDue
@@ -4181,12 +4197,12 @@ async function exportMonthlyExpenseReportSettings() {
 
         const summaryWs = XLSX.utils.aoa_to_sheet(summaryAoa);
         
-        // Merges for Summary Tab header
+        // Merges for Summary Tab header (columns A to J, index 0 to 9)
         summaryWs['!merges'] = [
-            { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
-            { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
-            { s: { r: 2, c: 0 }, e: { r: 2, c: 7 } },
-            { s: { r: 3, c: 0 }, e: { r: 3, c: 7 } }
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },
+            { s: { r: 1, c: 0 }, e: { r: 1, c: 9 } },
+            { s: { r: 2, c: 0 }, e: { r: 2, c: 9 } },
+            { s: { r: 3, c: 0 }, e: { r: 3, c: 9 } }
         ];
 
         summaryWs['!cols'] = [
@@ -4194,7 +4210,9 @@ async function exportMonthlyExpenseReportSettings() {
             { wch: 22 },  // Month
             { wch: 22 },  // Total Salary
             { wch: 20 },  // Total Travel Fare
+            { wch: 22 },  // Total Salary + Fare
             { wch: 20 },  // Total Advance
+            { wch: 24 },  // Total Previous Balance
             { wch: 20 },  // Total Net Payable
             { wch: 20 },  // Total Paid Amount
             { wch: 20 }   // Total Remaining Due
@@ -4218,6 +4236,7 @@ async function exportMonthlyExpenseReportSettings() {
                     "Days Worked", 
                     "Salary Earned (₹)", 
                     "Travel Fare (₹)", 
+                    "Salary + Fare (₹)", 
                     "Advance Deducted (₹)", 
                     "Previous Balance (₹)", 
                     "Net Payable (₹)", 
@@ -4243,6 +4262,7 @@ async function exportMonthlyExpenseReportSettings() {
                     p.isSupervisor ? 'N/A' : (p.daysWorked || 0),
                     sal,
                     fare,
+                    sal + fare,
                     adv,
                     prev,
                     net,
@@ -4260,8 +4280,9 @@ async function exportMonthlyExpenseReportSettings() {
                 "",
                 sheet.totalSalary,
                 sheet.totalFare,
+                sheet.totalSalary + sheet.totalFare,
                 sheet.totalAdvance,
-                "", // Blank for Prev Balance to avoid sum errors
+                sheet.totalPrevBal,
                 sheet.totalNet,
                 sheet.totalPaid,
                 sheet.totalDue,
@@ -4270,12 +4291,12 @@ async function exportMonthlyExpenseReportSettings() {
 
             const ws = XLSX.utils.aoa_to_sheet(monthAoa);
             
-            // Merges for Monthly Tab Header
+            // Merges for Monthly Tab Header (columns A to M, index 0 to 12)
             ws['!merges'] = [
-                { s: { r: 0, c: 0 }, e: { r: 0, c: 11 } },
-                { s: { r: 1, c: 0 }, e: { r: 1, c: 11 } },
-                { s: { r: 2, c: 0 }, e: { r: 2, c: 11 } },
-                { s: { r: 3, c: 0 }, e: { r: 3, c: 11 } }
+                { s: { r: 0, c: 0 }, e: { r: 0, c: 12 } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 12 } },
+                { s: { r: 2, c: 0 }, e: { r: 2, c: 12 } },
+                { s: { r: 3, c: 0 }, e: { r: 3, c: 12 } }
             ];
 
             ws['!cols'] = [
@@ -4285,6 +4306,7 @@ async function exportMonthlyExpenseReportSettings() {
                 { wch: 12 },  // Days Worked
                 { wch: 18 },  // Salary Earned
                 { wch: 16 },  // Travel Fare
+                { wch: 18 },  // Salary + Fare
                 { wch: 20 },  // Advance Deducted
                 { wch: 20 },  // Previous Balance
                 { wch: 18 },  // Net Payable
