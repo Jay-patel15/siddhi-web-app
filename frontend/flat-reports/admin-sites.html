@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Create Project Site | Siddhi Electricals</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="../assets/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="js/api.js" defer></script>
+    <script src="js/admin.js" defer></script>
+</head>
+<body data-page="flat-reports">
+
+    <div class="overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Unified Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+        <div class="brand" style="display:flex; align-items:center; gap:12px; margin-bottom:2.5rem;">
+            <div style="width:55px; height:55px; overflow:hidden; display:flex; align-items:center; flex-shrink:0;">
+                <img src="../assets/logo-horizontal.png" alt="Icon" style="height:55px; width:auto; max-width:none;">
+            </div>
+            <div style="display:flex; flex-direction:column; line-height:1.15;">
+                <span style="color:var(--primary); font-size:1.5rem; font-weight:800;">Siddhi</span>
+                <span style="color:var(--primary); font-size:1.5rem; font-weight:800;">Electricals</span>
+            </div>
+        </div>
+        <ul class="nav-links">
+            <li class="nav-item" data-section="dashboard"     onclick="location.href='/sections/dashboard.html'">🏠 Dashboard</li>
+            <li class="nav-item" data-section="employees"     onclick="location.href='/sections/employees.html'">👥 Employees</li>
+            <li class="nav-item" data-section="attendance"    onclick="location.href='/sections/attendance.html'">🕒 Attendance</li>
+            <li class="nav-item" data-section="advance"       onclick="location.href='/sections/advance.html'">💲 Advance Payments</li>
+            <li class="nav-item" data-section="payroll"       onclick="location.href='/sections/payroll.html'">📄 Payroll</li>
+            <li class="nav-item" data-section="uploads"       onclick="location.href='/sections/uploads.html'">📷 Uploads</li>
+            <li class="nav-item" data-section="attPhotos"     onclick="location.href='/sections/attPhotos.html'">📸 Att. Photos</li>
+            <li class="nav-item active" data-section="flat-reports" onclick="location.href='/flat-reports/admin-dashboard.html'">🏢 Progress Reports</li>
+        </ul>
+        <div class="nav-settings">
+            <li class="nav-item" data-section="settings"      onclick="location.href='/sections/settings.html'">⚙️ Settings</li>
+            <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn">
+                <span class="toggle-icon">🌙</span> <span id="dark-mode-label">Dark Mode</span>
+            </button>
+            <li class="nav-item" style="color:var(--danger)" onclick="logout()">🚪 Logout</li>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header style="display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem;">
+            <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
+            <div>
+                <h1 style="font-size:1.75rem; font-weight:800; color:var(--dark);">⚙️ Configure Construction Site</h1>
+                <p style="color:var(--gray); font-size:0.9rem; margin-top:2px;">Define floors, flats-per-floor, and BHK configurations. Flats will be auto-generated.</p>
+            </div>
+        </header>
+
+        <div style="max-width: 600px; margin: 0 auto;">
+            <div class="card" style="padding: 2rem;">
+                <form id="create-site-form" onsubmit="handleCreateSite(event)">
+                    
+                    <div class="form-group">
+                        <label for="site-name">Site Name <span style="color:var(--danger)">*</span></label>
+                        <input type="text" id="site-name" class="form-control" placeholder="e.g. Royal Heritage" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="site-address">Address / Location</label>
+                        <input type="text" id="site-address" class="form-control" placeholder="e.g. Sector-15, Gandhinagar">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="site-desc">Description</label>
+                        <input type="text" id="site-desc" class="form-control" placeholder="e.g. Tower A & B electrical wiring work">
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; margin-bottom:1.25rem;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="total-floors">Total Floors <span style="color:var(--danger)">*</span></label>
+                            <input type="number" id="total-floors" class="form-control" value="5" min="1" max="100" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="flats-per-floor">Flats Per Floor <span style="color:var(--danger)">*</span></label>
+                            <input type="number" id="flats-per-floor" class="form-control" value="4" min="1" max="50" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>BHK Mix Distribution <span style="color:var(--danger)">*</span></label>
+                        <p style="font-size:0.75rem; color:var(--gray); margin-bottom:0.5rem; font-weight:500;">Select the BHK configurations available on each floor. Generated flats will cycle through selections.</p>
+                        
+                        <div style="display:flex; gap:0.55rem; flex-wrap:wrap;" id="bhk-chips-container">
+                            <span class="bhk-chip active" onclick="toggleBhkChip(this)" data-val="1BHK" style="padding:0.5rem 1rem; border-radius:50px; font-size:0.85rem; font-weight:700; cursor:pointer; border:2px solid var(--primary); color:white; background:var(--primary); transition:var(--transition);">1 BHK</span>
+                            <span class="bhk-chip active" onclick="toggleBhkChip(this)" data-val="2BHK" style="padding:0.5rem 1rem; border-radius:50px; font-size:0.85rem; font-weight:700; cursor:pointer; border:2px solid var(--primary); color:white; background:var(--primary); transition:var(--transition);">2 BHK</span>
+                            <span class="bhk-chip active" onclick="toggleBhkChip(this)" data-val="3BHK" style="padding:0.5rem 1rem; border-radius:50px; font-size:0.85rem; font-weight:700; cursor:pointer; border:2px solid var(--primary); color:white; background:var(--primary); transition:var(--transition);">3 BHK</span>
+                            <span class="bhk-chip" onclick="toggleBhkChip(this)" data-val="4BHK" style="padding:0.5rem 1rem; border-radius:50px; font-size:0.85rem; font-weight:700; cursor:pointer; border:2px solid #cbd5e1; color:var(--gray); background:transparent; transition:var(--transition);">4 BHK</span>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:1rem; margin-top:2rem; border-top:1px solid #cbd5e1; padding-top:1.5rem;">
+                        <button type="button" class="btn btn-outline" onclick="location.href='admin-dashboard.html'" style="flex:1; justify-content:center;">Cancel</button>
+                        <button type="submit" class="btn btn-primary" style="flex:2; justify-content:center;">⚡ Generate Site & Flats</button>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function toggleBhkChip(chip) {
+            const isActive = chip.classList.contains('active');
+            if (isActive) {
+                // Make sure at least one is selected
+                const activeCount = document.querySelectorAll('#bhk-chips-container .bhk-chip.active').length;
+                if (activeCount <= 1) {
+                    alert('Please select at least one BHK type.');
+                    return;
+                }
+                chip.classList.remove('active');
+                chip.style.backgroundColor = 'transparent';
+                chip.style.borderColor = '#cbd5e1';
+                chip.style.color = 'var(--gray)';
+            } else {
+                chip.classList.add('active');
+                chip.style.backgroundColor = 'var(--primary)';
+                chip.style.borderColor = 'var(--primary)';
+                chip.style.color = 'white';
+            }
+        }
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Progress Dashboard | Siddhi Electricals</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="../assets/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="js/api.js" defer></script>
+    <script src="js/admin.js" defer></script>
+</head>
+<body data-page="flat-reports">
+
+    <div class="overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Unified Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+        <div class="brand" style="display:flex; align-items:center; gap:12px; margin-bottom:2.5rem;">
+            <div style="width:55px; height:55px; overflow:hidden; display:flex; align-items:center; flex-shrink:0;">
+                <img src="../assets/logo-horizontal.png" alt="Icon" style="height:55px; width:auto; max-width:none;">
+            </div>
+            <div style="display:flex; flex-direction:column; line-height:1.15;">
+                <span style="color:var(--primary); font-size:1.5rem; font-weight:800;">Siddhi</span>
+                <span style="color:var(--primary); font-size:1.5rem; font-weight:800;">Electricals</span>
+            </div>
+        </div>
+        <ul class="nav-links">
+            <li class="nav-item" data-section="dashboard"     onclick="location.href='/sections/dashboard.html'">🏠 Dashboard</li>
+            <li class="nav-item" data-section="employees"     onclick="location.href='/sections/employees.html'">👥 Employees</li>
+            <li class="nav-item" data-section="attendance"    onclick="location.href='/sections/attendance.html'">🕒 Attendance</li>
+            <li class="nav-item" data-section="advance"       onclick="location.href='/sections/advance.html'">💲 Advance Payments</li>
+            <li class="nav-item" data-section="payroll"       onclick="location.href='/sections/payroll.html'">📄 Payroll</li>
+            <li class="nav-item" data-section="uploads"       onclick="location.href='/sections/uploads.html'">📷 Uploads</li>
+            <li class="nav-item" data-section="attPhotos"     onclick="location.href='/sections/attPhotos.html'">📸 Att. Photos</li>
+            <li class="nav-item active" data-section="flat-reports" onclick="location.href='/flat-reports/admin-dashboard.html'">🏢 Progress Reports</li>
+        </ul>
+        <div class="nav-settings">
+            <li class="nav-item" data-section="settings"      onclick="location.href='/sections/settings.html'">⚙️ Settings</li>
+            <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn">
+                <span class="toggle-icon">🌙</span> <span id="dark-mode-label">Dark Mode</span>
+            </button>
+            <li class="nav-item" style="color:var(--danger)" onclick="logout()">🚪 Logout</li>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header style="display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem;">
+            <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; width:100%; flex-wrap:wrap; gap:1rem;">
+                <div>
+                    <h1 style="font-size:1.75rem; font-weight:800; color:var(--dark);">🏢 Progress Reports</h1>
+                    <p style="color:var(--gray); font-size:0.9rem; margin-top:2px;">Cumulative real-estate construction status and audit logging</p>
+                </div>
+                <button class="btn btn-primary" onclick="location.href='admin-sites.html'">➕ Create New Site</button>
+            </div>
+        </header>
+
+        <!-- 1. HOME VIEW (SITES SUMMARY LIST) -->
+        <div id="sites-summary-view">
+            <h2 style="font-size:1.2rem; margin-bottom:1rem; color:var(--dark); font-weight:700;">All Project Sites</h2>
+            <div id="sites-grid" class="site-grid">
+                <!-- Dynamically populated -->
+                <p style="grid-column: 1/-1; text-align:center; padding:3rem; color:var(--gray);">Loading project sites...</p>
+            </div>
+        </div>
+
+        <!-- 2. SITE DETAIL VIEW (Hidden by default) -->
+        <div id="site-detail-view" style="display:none;">
+            <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem; flex-wrap:wrap; justify-content:space-between;">
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <button class="btn btn-outline" onclick="showSitesSummary()" style="padding:0.4rem 0.85rem; font-size:0.85rem;">◀ Back to Sites</button>
+                    <h2 id="detail-site-name" style="font-size:1.5rem; font-weight:800; margin:0;">Royal Residency</h2>
+                </div>
+                <div style="display:flex; gap:0.5rem;">
+                    <button class="btn btn-secondary" onclick="openAssignModal()">👥 Assign Supervisors</button>
+                    <button class="btn btn-danger" id="delete-site-btn" onclick="deleteSelectedSite()">🗑️ Delete Site</button>
+                </div>
+            </div>
+
+            <!-- Dashboard Grid Section -->
+            <div style="display:grid; grid-template-columns: 2fr 1fr; gap:1.5rem; margin-bottom:1.5rem;" id="dashboard-metrics-grid">
+                <!-- Left Column: Metrics & Flats -->
+                <div>
+                    <!-- Site-level progress card -->
+                    <div class="card" style="padding:1.25rem;">
+                        <h3 style="font-size:1rem; margin-bottom:0.75rem;">Site-Level Progress</h3>
+                        <div style="display:flex; align-items:center; gap:1rem;">
+                            <div class="progress-bar-container" style="flex:1; margin:0;">
+                                <div class="progress-bar-fill" id="detail-progress-bar" style="width: 0%"></div>
+                            </div>
+                            <span id="detail-progress-text" style="font-weight:800; font-size:1.1rem; color:var(--primary);">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Flat Grid Card -->
+                    <div class="card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+                            <h3 style="font-size:1.05rem; font-weight:700;">Flats Progress Matrix</h3>
+                            <!-- Filters -->
+                            <div style="display:flex; gap:0.5rem;">
+                                <select id="admin-filter-floor" onchange="filterAdminFlats()" class="form-control" style="padding:0.35rem 0.5rem; font-size:0.8rem; width:110px;">
+                                    <option value="all">All Floors</option>
+                                </select>
+                                <select id="admin-filter-bhk" onchange="filterAdminFlats()" class="form-control" style="padding:0.35rem 0.5rem; font-size:0.8rem; width:110px;">
+                                    <option value="all">All BHKs</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="admin-flats-grid" class="flat-grid">
+                            <!-- Populated -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Charts & Activity logs -->
+                <div style="display:flex; flex-direction:column; gap:1.5rem;">
+                    <!-- Stage Completion Bar Chart -->
+                    <div class="card" style="margin-bottom:0; display:flex; flex-direction:column; flex:1;">
+                        <h3 style="font-size:1rem; margin-bottom:1rem;">Stage Progress</h3>
+                        <div id="stage-progress-bars" style="display:flex; flex-direction:column; gap:0.85rem; flex:1; justify-content:center;">
+                            <!-- Populated with rows -->
+                        </div>
+                    </div>
+
+                    <!-- Room Completion Bar Chart -->
+                    <div class="card" style="margin-bottom:0; display:flex; flex-direction:column; flex:1;">
+                        <h3 style="font-size:1rem; margin-bottom:1rem;">Room Completion</h3>
+                        <div id="room-progress-bars" style="display:flex; flex-direction:column; gap:0.85rem; flex:1; justify-content:center;">
+                            <!-- Populated with rows -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Logs Section -->
+            <div class="card">
+                <h3 style="font-size:1.1rem; font-weight:700; margin-bottom:1rem; border-bottom:1px solid #cbd5e1; padding-bottom:0.5rem;">📋 Recent Updates Audit Logs</h3>
+                <div style="max-height: 350px; overflow-y:auto;">
+                    <ul id="activity-logs-list" class="activity-feed">
+                        <!-- Populated -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ASSIGN SUPERVISORS MODAL -->
+    <div id="assign-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 style="font-weight:800;">👥 Assign Supervisors</h3>
+                <button onclick="closeAssignModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer;">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:0.85rem; color:var(--gray); margin-bottom:1rem;">Check the supervisors/employees you wish to assign to this site. They will be able to see this site and submit progress reports.</p>
+                <div id="supervisors-checkboxes-list" style="display:flex; flex-direction:column; gap:0.75rem; max-height: 250px; overflow-y:auto; padding:0.5rem 0;">
+                    <!-- Checkboxes -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeAssignModal()">Close</button>
+                <button class="btn btn-primary" onclick="saveAssignments()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FLAT VIEW / EDIT MODAL FOR ADMINS -->
+    <div id="admin-flat-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 650px;">
+            <div class="modal-header" style="flex-direction:column; align-items:stretch; gap:0.5rem;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; width:100%;">
+                    <div>
+                        <h3 id="admin-modal-title" style="font-weight:800; display:inline-block; margin:0;">Flat 302 Progress</h3>
+                        <button id="edit-flat-btn" class="btn btn-outline" style="padding:0.2rem 0.4rem; font-size:0.7rem; margin-left:0.5rem; display:inline-flex; align-items:center; gap:2px; vertical-align:middle;" onclick="toggleEditFlatMode()">✏️ Edit</button>
+                        <p id="admin-modal-subtitle" style="font-size:0.8rem; color:var(--gray); margin-top:2px; margin-bottom:0;">3BHK - Royal Residency</p>
+                    </div>
+                    <button onclick="closeAdminFlatModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer;">✕</button>
+                </div>
+                
+                <!-- Hidden Flat Edit Form -->
+                <div id="admin-flat-edit-form" style="display:none; width: 100%; border: 1px dashed var(--gray); border-radius: 8px; padding: 0.75rem; margin-top: 0.5rem; background: var(--light);">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; margin-bottom:0.5rem;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.7rem; font-weight:700; color:var(--dark);">Flat Number</label>
+                            <input type="text" id="edit-flat-number" class="form-control" style="padding:0.35rem 0.5rem; font-size:0.8rem; background:var(--white); color:var(--dark);">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.7rem; font-weight:700; color:var(--dark);">BHK Type</label>
+                            <select id="edit-flat-bhk" class="form-control" style="padding:0.35rem 0.5rem; font-size:0.8rem; background:var(--white); color:var(--dark);">
+                                <option value="1BHK">1BHK</option>
+                                <option value="2BHK">2BHK</option>
+                                <option value="3BHK">3BHK</option>
+                                <option value="4BHK">4BHK</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0.5rem;">
+                        <label style="font-size:0.7rem; font-weight:700; color:var(--dark);">Flat Description</label>
+                        <input type="text" id="edit-flat-desc" class="form-control" placeholder="e.g. Garden View" style="padding:0.35rem 0.5rem; font-size:0.8rem; background:var(--white); color:var(--dark);">
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
+                        <button class="btn btn-outline" style="padding:0.25rem 0.5rem; font-size:0.75rem;" onclick="toggleEditFlatMode(false)">Cancel</button>
+                        <button class="btn btn-primary" style="padding:0.25rem 0.5rem; font-size:0.75rem;" onclick="saveFlatMetadata()">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-body" style="background:#f1f5f9; max-height:60vh; overflow-y:auto;">
+                <!-- Room List -->
+                <h4 style="font-size:0.85rem; font-weight:800; color:var(--gray); text-transform:uppercase; margin-bottom:0.5rem;">Rooms Status</h4>
+                <div id="admin-modal-rooms" style="display:flex; flex-direction:column; gap:0.75rem; margin-bottom:1.5rem;">
+                    <!-- Rooms -->
+                </div>
+
+                <!-- Stages List -->
+                <h4 style="font-size:0.85rem; font-weight:800; color:var(--gray); text-transform:uppercase; margin-bottom:0.5rem;">Construction Stages</h4>
+                <div id="admin-modal-stages" class="card" style="padding:1rem; margin-bottom:0;">
+                    <!-- Stages -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeAdminFlatModal()">Close Window</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

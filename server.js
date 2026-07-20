@@ -50,6 +50,7 @@ const advanceRoutes = require('./backend/routes/advances');
 const paymentRoutes = require('./backend/routes/payments');
 const uploadRoutes = require('./backend/routes/uploads');
 const payrollRoutes = require('./backend/routes/payroll');
+const flatReportRoutes = require('./backend/flat-reports/routes');
 
 // Mount Routes
 app.use('/api', authRoutes); 
@@ -62,6 +63,7 @@ app.use('/api/advances', advanceRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/flat-reports', flatReportRoutes);
 
 // Start Server (only when not imported by Vercel)
 if (process.env.VERCEL !== '1') {

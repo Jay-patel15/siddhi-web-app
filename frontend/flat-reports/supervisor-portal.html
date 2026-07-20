@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Progress Tracker | Siddhi Electricals</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="js/api.js" defer></script>
+    <script src="js/supervisor.js" defer></script>
+</head>
+<body class="supervisor-body">
+
+    <!-- Top Sticky Header -->
+    <header class="supervisor-header">
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            <div>
+                <h1 style="font-size:1.3rem; font-weight:800; letter-spacing:-0.5px;">🏢 Progress Tracker</h1>
+                <p id="supervisor-name-label" style="font-size:0.85rem; opacity:0.85; margin-top:2px;">Loading supervisor...</p>
+            </div>
+            <div style="display:flex; gap:0.5rem;">
+                <button class="btn btn-primary" id="portal-dark-btn" onclick="toggleDarkMode()" style="padding:0.5rem; border-radius:50%; min-width:38px; height:38px; justify-content:center;">🌙</button>
+                <button class="btn btn-danger" onclick="location.href='/employee-portal.html'" style="padding:0.5rem 0.85rem; height:38px;" title="Attendance Portal">🕒 Attendance</button>
+                <button class="btn btn-outline" onclick="logout()" style="padding:0.5rem; border-color:rgba(255,255,255,0.4); color:white; min-width:38px; height:38px; justify-content:center;" title="Logout">🚪</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main style="padding:1rem; max-width:600px; margin:0 auto;">
+
+        <!-- 1. SITE SELECTION CONTAINER -->
+        <div id="site-selector-container">
+            <h2 style="font-size:1.1rem; margin-bottom:1rem; color:var(--dark);">Select Construction Site</h2>
+            <div id="assigned-sites-list" class="site-grid" style="grid-template-columns: 1fr; gap: 1rem;">
+                <!-- Dynamically populated -->
+                <p style="text-align:center; color:var(--gray); padding:2rem;">Loading assigned sites...</p>
+            </div>
+        </div>
+
+        <!-- 2. FLATS GRID CONTAINER (Hidden by default) -->
+        <div id="flats-viewer-container" style="display:none;">
+            <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem;">
+                <button class="btn btn-outline" onclick="showSiteSelector()" style="padding:0.4rem 0.75rem; font-size:0.85rem;">◀ Change Site</button>
+                <h2 id="selected-site-title" style="font-size:1.2rem; margin:0;">Site Flats</h2>
+            </div>
+
+            <!-- Filters -->
+            <div class="card" style="padding:1rem; margin-bottom:1rem;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+                    <div>
+                        <label style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--gray); display:block; margin-bottom:0.25rem;">Floor</label>
+                        <select id="filter-floor" onchange="filterFlatsGrid()" class="form-control" style="padding:0.45rem 0.75rem; font-size:0.85rem;">
+                            <option value="all">All Floors</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--gray); display:block; margin-bottom:0.25rem;">BHK Type</label>
+                        <select id="filter-bhk" onchange="filterFlatsGrid()" class="form-control" style="padding:0.45rem 0.75rem; font-size:0.85rem;">
+                            <option value="all">All BHKs</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Flats List Grid -->
+            <div id="flats-grid" class="flat-grid">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+    </main>
+
+    <!-- 3. FLAT REPORT FORM OVERLAY (Slide-up menu) -->
+    <div id="report-form-overlay" class="report-form-overlay">
+        <!-- Header -->
+        <div class="report-form-header">
+            <div>
+                <h2 id="form-flat-title" style="font-size:1.2rem; font-weight:800;">Flat 302 Report</h2>
+                <p id="form-flat-subtitle" style="font-size:0.8rem; color:var(--gray); margin-top:2px;">3BHK - Floor 3 (Royal Residency)</p>
+            </div>
+            <button onclick="closeReportForm()" style="background:none; border:none; font-size:1.8rem; cursor:pointer; color:var(--gray); line-height:1; width:36px; height:36px; display:flex; align-items:center; justify-content:center;">✕</button>
+        </div>
+
+        <!-- Scrollable Form Body -->
+        <div class="report-form-body">
+            
+            <p id="last-updated-label" style="font-size:0.75rem; color:var(--gray); text-align:right; margin-bottom:1rem; font-style:italic;"></p>
+
+            <!-- SECTION A: ROOMS ACCORDION -->
+            <h3 style="font-size:0.9rem; font-weight:800; text-transform:uppercase; color:var(--gray); margin-bottom:0.75rem; letter-spacing:0.5px;">🔑 Rooms Details</h3>
+            <div id="rooms-accordion-container" style="margin-bottom:2rem;">
+                <!-- Room Accordions (dynamically rendered) -->
+            </div>
+
+            <!-- SECTION B: STAGE TRACKER -->
+            <h3 style="font-size:0.9rem; font-weight:800; text-transform:uppercase; color:var(--gray); margin-bottom:0.75rem; letter-spacing:0.5px;">⚙️ Electrical / Civil Stages</h3>
+            <div class="card" style="padding:1rem;">
+                <div id="stages-container">
+                    <!-- Stages Rows (dynamically rendered) -->
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Sticky Footer Action Bar -->
+        <div class="report-form-footer">
+            <button class="btn btn-outline" onclick="closeReportForm()" style="flex:1; justify-content:center; padding:0.85rem;">Cancel</button>
+            <button class="btn btn-primary" onclick="saveReportForm()" style="flex:2; justify-content:center; padding:0.85rem; font-size:1rem;">💾 Save Changes</button>
+        </div>
+    </div>
+
+    <!-- Hidden file input for uploads -->
+    <input type="file" id="file-uploader-input" accept="image/*" style="display:none;" onchange="handleImageSelection(event)">
+
+</body>
+</html>
