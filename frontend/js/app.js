@@ -91,6 +91,7 @@ let employeesData = [];
 let attendanceData = [];
 let advancesData = [];
 let paymentsData = []; // Added
+let currentPayrollData = [];
 let currentModalEmployee = null;
 let currentModalMonth = null;
 
@@ -2623,6 +2624,7 @@ async function loadPayroll() {
         }
 
         payroll = await res.json();
+        currentPayrollData = Array.isArray(payroll) ? payroll : [];
         paymentsRaw = await payRes.json();
         paymentsData = Array.isArray(paymentsRaw) ? paymentsRaw : [];
 
@@ -4016,5 +4018,297 @@ function toggleSelectAllGalleryImages() {
     document.getElementById('select-all-btn').innerText = wasAllSelected ? '☑️ Select All' : '⬜ Deselect All';
 }
 window.toggleSelectAllGalleryImages = toggleSelectAllGalleryImages;
+
+async function exportMonthlyExpenseReportSettings() {
+    const startMonthVal = document.getElementById('export-expense-start-month').value;
+    const endMonthVal = document.getElementById('export-expense-end-month').value;
+
+    if (!startMonthVal || !endMonthVal) {
+        alert('Please select both Start Month and End Month.');
+        return;
+    }
+
+    const [startYear, startMonth] = startMonthVal.split('-').map(Number);
+    const [endYear, endMonth] = endMonthVal.split('-').map(Number);
+
+    if (startYear > endYear || (startYear === endYear && startMonth > endMonth)) {
+        alert('Start month must be prior to or equal to end month.');
+        return;
+    }
+
+    const downloadBtn = document.querySelector('#export-expense-end-month').parentElement.parentElement.nextElementSibling;
+    const originalText = downloadBtn.innerHTML;
+    downloadBtn.disabled = true;
+
+    // Generate list of month strings in YYYY-MM format
+    const monthStrings = [];
+    let curYear = startYear;
+    let curMonth = startMonth;
+    while (curYear < endYear || (curYear === endYear && curMonth <= endMonth)) {
+        monthStrings.push(`${curYear}-${String(curMonth).padStart(2, '0')}`);
+        curMonth++;
+        if (curMonth > 12) {
+            curMonth = 1;
+            curYear++;
+        }
+    }
+
+    downloadBtn.innerHTML = `⏳ Fetching ${monthStrings.length} Months...`;
+
+    try {
+        // Fetch payroll details for all months and payments data
+        const payrollPromises = monthStrings.map(m =>
+            fetch(`${API_URL}/payroll?month=${m}`).then(r => {
+                if (!r.ok) throw new Error(`Failed to load payroll for ${m}: ${r.status}`);
+                return r.json();
+            })
+        );
+
+        const payRes = await fetch(`${API_URL}/payments`);
+        if (!payRes.ok) throw new Error(`Failed to load payments: ${payRes.status}`);
+
+        const payrollList = await Promise.all(payrollPromises);
+        const paymentsRaw = await payRes.json();
+        const paymentsList = Array.isArray(paymentsRaw) ? paymentsRaw : [];
+
+        // Format dates into readable labels
+        const formatMonthLabel = (mVal) => {
+            const [y, m] = mVal.split('-');
+            const d = new Date(y, parseInt(m) - 1, 1);
+            return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        };
+
+        const formattedStart = formatMonthLabel(startMonthVal);
+        const formattedEnd = formatMonthLabel(endMonthVal);
+
+        // 1. Build Summary Tab Data (Tab #1)
+        const summaryAoa = [
+            ["SIDDHI ELECTRICALS"],
+            ["MONTHLY EXPENSE RANGE SUMMARY"],
+            [`RANGE: ${formattedStart.toUpperCase()} TO ${formattedEnd.toUpperCase()}`],
+            [`Generated On: ${new Date().toLocaleDateString('en-IN')} - ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`],
+            [], // Empty spacer row
+            [
+                "S.No", 
+                "Month", 
+                "Total Salary Earned (₹)", 
+                "Total Travel Fare (₹)", 
+                "Total Advance (₹)", 
+                "Total Net Payable (₹)", 
+                "Total Paid Amount (₹)", 
+                "Total Remaining Due (₹)"
+            ]
+        ];
+
+        let grandSalary = 0;
+        let grandFare = 0;
+        let grandAdvance = 0;
+        let grandNet = 0;
+        let grandPaid = 0;
+        let grandDue = 0;
+
+        const monthlySheetsData = [];
+
+        monthStrings.forEach((m, idx) => {
+            const payrollData = payrollList[idx] || [];
+            const monthLabel = formatMonthLabel(m);
+
+            let totalSalary = 0;
+            let totalFare = 0;
+            let totalAdvance = 0;
+            let totalNet = 0;
+            let totalPaid = 0;
+            let totalDue = 0;
+
+            payrollData.forEach(p => {
+                const sal = p.salaryEarned || 0;
+                const fare = p.fareTotal || 0;
+                const adv = p.advancePaid || 0;
+                const net = p.finalPayable || 0;
+                const paid = p.paidTotal || 0;
+                const due = p.remainingDue !== undefined ? p.remainingDue : (net - paid);
+
+                totalSalary += sal;
+                totalFare += fare;
+                totalAdvance += adv;
+                totalNet += net;
+                totalPaid += paid;
+                totalDue += due;
+            });
+
+            grandSalary += totalSalary;
+            grandFare += totalFare;
+            grandAdvance += totalAdvance;
+            grandNet += totalNet;
+            grandPaid += totalPaid;
+            grandDue += totalDue;
+
+            summaryAoa.push([
+                idx + 1,
+                monthLabel,
+                totalSalary,
+                totalFare,
+                totalAdvance,
+                totalNet,
+                totalPaid,
+                totalDue
+            ]);
+
+            monthlySheetsData.push({
+                monthLabel,
+                monthKey: m,
+                payrollData,
+                totalSalary,
+                totalFare,
+                totalAdvance,
+                totalNet,
+                totalPaid,
+                totalDue
+            });
+        });
+
+        // Append Summary Totals Row
+        summaryAoa.push([
+            "",
+            "GRAND TOTAL",
+            grandSalary,
+            grandFare,
+            grandAdvance,
+            grandNet,
+            grandPaid,
+            grandDue
+        ]);
+
+        const summaryWs = XLSX.utils.aoa_to_sheet(summaryAoa);
+        
+        // Merges for Summary Tab header
+        summaryWs['!merges'] = [
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
+            { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
+            { s: { r: 2, c: 0 }, e: { r: 2, c: 7 } },
+            { s: { r: 3, c: 0 }, e: { r: 3, c: 7 } }
+        ];
+
+        summaryWs['!cols'] = [
+            { wch: 6 },   // S.No
+            { wch: 22 },  // Month
+            { wch: 22 },  // Total Salary
+            { wch: 20 },  // Total Travel Fare
+            { wch: 20 },  // Total Advance
+            { wch: 20 },  // Total Net Payable
+            { wch: 20 },  // Total Paid Amount
+            { wch: 20 }   // Total Remaining Due
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
+
+        // 2. Build Individual Monthly Tabs
+        monthlySheetsData.forEach(sheet => {
+            const monthAoa = [
+                ["SIDDHI ELECTRICALS"],
+                ["MONTHLY EXPENSE & PAYROLL REPORT"],
+                [`MONTH: ${sheet.monthLabel.toUpperCase()}`],
+                [`Generated On: ${new Date().toLocaleDateString('en-IN')}`],
+                [], // Spacer
+                [
+                    "S.No", 
+                    "Employee Name", 
+                    "Designation / Type", 
+                    "Days Worked", 
+                    "Salary Earned (₹)", 
+                    "Travel Fare (₹)", 
+                    "Advance Deducted (₹)", 
+                    "Previous Balance (₹)", 
+                    "Net Payable (₹)", 
+                    "Paid Amount (₹)", 
+                    "Remaining Due (₹)", 
+                    "Status"
+                ]
+            ];
+
+            sheet.payrollData.forEach((p, idx) => {
+                const sal = p.salaryEarned || 0;
+                const fare = p.fareTotal || 0;
+                const adv = p.advancePaid || 0;
+                const prev = p.previousBalance || 0;
+                const net = p.finalPayable || 0;
+                const paid = p.paidTotal || 0;
+                const due = p.remainingDue !== undefined ? p.remainingDue : (net - paid);
+
+                monthAoa.push([
+                    idx + 1,
+                    p.employee.name || 'Unknown',
+                    p.isSupervisor ? 'Supervisor (Fixed)' : 'Daily Wages',
+                    p.isSupervisor ? 'N/A' : (p.daysWorked || 0),
+                    sal,
+                    fare,
+                    adv,
+                    prev,
+                    net,
+                    paid,
+                    due,
+                    p.status || (due <= 0 ? 'Settled' : (paid > 0 ? 'Partial' : 'Unpaid'))
+                ]);
+            });
+
+            // Add Monthly Totals Row
+            monthAoa.push([
+                "",
+                "TOTAL EXPENSES SUMMARY",
+                "",
+                "",
+                sheet.totalSalary,
+                sheet.totalFare,
+                sheet.totalAdvance,
+                "", // Blank for Prev Balance to avoid sum errors
+                sheet.totalNet,
+                sheet.totalPaid,
+                sheet.totalDue,
+                ""
+            ]);
+
+            const ws = XLSX.utils.aoa_to_sheet(monthAoa);
+            
+            // Merges for Monthly Tab Header
+            ws['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: 11 } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 11 } },
+                { s: { r: 2, c: 0 }, e: { r: 2, c: 11 } },
+                { s: { r: 3, c: 0 }, e: { r: 3, c: 11 } }
+            ];
+
+            ws['!cols'] = [
+                { wch: 6 },   // S.No
+                { wch: 25 },  // Employee Name
+                { wch: 22 },  // Designation / Type
+                { wch: 12 },  // Days Worked
+                { wch: 18 },  // Salary Earned
+                { wch: 16 },  // Travel Fare
+                { wch: 20 },  // Advance Deducted
+                { wch: 20 },  // Previous Balance
+                { wch: 18 },  // Net Payable
+                { wch: 18 },  // Paid Amount
+                { wch: 18 },  // Remaining Due
+                { wch: 12 }   // Status
+            ];
+
+            // Limit tab titles to 31 chars
+            const tabName = sheet.monthLabel.substring(0, 31);
+            XLSX.utils.book_append_sheet(wb, ws, tabName);
+        });
+
+        // Write file
+        XLSX.writeFile(wb, `Siddhi_Expenses_Report_${startMonthVal}_to_${endMonthVal}.xlsx`);
+
+    } catch (e) {
+        console.error(e);
+        alert('Failed to generate expense report: ' + e.message);
+    } finally {
+        downloadBtn.disabled = false;
+        downloadBtn.innerHTML = originalText;
+    }
+}
+window.exportMonthlyExpenseReportSettings = exportMonthlyExpenseReportSettings;
 
 

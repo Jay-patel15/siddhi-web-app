@@ -135,6 +135,24 @@
                     </div>
                 </div>
 
+                <div class="card" style="margin-bottom:2rem;border-left:4px solid #10b981;">
+                    <h3 style="margin-top:0;">📊 Export Monthly Expense Report (Excel Range)</h3>
+                    <p style="color:var(--gray);font-size:0.9rem;margin-bottom:1.5rem;">Generate a professional Excel report containing a range summary sheet followed by individual detailed monthly sheets.</p>
+                    <div style="display:flex; gap:1rem; margin-bottom:1.5rem; max-width:500px; flex-wrap:wrap;">
+                        <div class="form-group" style="flex:1; min-width:140px; margin-bottom:0;">
+                            <label style="font-weight:600; font-size:0.85rem; color:var(--dark);">Start Month</label>
+                            <input type="month" id="export-expense-start-month" class="form-control" style="background:var(--white); color:var(--dark); width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1;">
+                        </div>
+                        <div class="form-group" style="flex:1; min-width:140px; margin-bottom:0;">
+                            <label style="font-weight:600; font-size:0.85rem; color:var(--dark);">End Month</label>
+                            <input type="month" id="export-expense-end-month" class="form-control" style="background:var(--white); color:var(--dark); width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1;">
+                        </div>
+                    </div>
+                    <button class="btn" style="background:#10b981; color:white; width:100%; padding:1rem; font-size:1.1rem; display:flex; align-items:center; justify-content:center; gap:0.5rem; font-weight:600;" onclick="exportMonthlyExpenseReportSettings()">
+                        <span>📊</span> Download Range Expense Report
+                    </button>
+                </div>
+
                 <div class="card" style="margin-bottom:2rem;border-left:4px solid var(--primary);">
                     <h3 style="margin-top:0;">📥 Download All Data (Excel Export)</h3>
                     <p style="color:var(--gray);font-size:0.9rem;margin-bottom:1.5rem;">Export your Employees, Attendance, Advances, and Payments into separated tabs in an Excel file.</p>
