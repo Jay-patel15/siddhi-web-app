@@ -1698,9 +1698,7 @@
                 timerContainer.style.display = 'none';
 
                 // Per-employee early check-in restriction (defaults to true / ON unless explicitly set to false)
-                const isEmpRestricted = currentEmployee ? (currentEmployee.restrictEarlyCheckIn !== false) : true;
-                const isGlobalRestricted = (allData.settings ? allData.settings.restrictEarlyCheckIn !== false : true);
-                const isRestricted = isEmpRestricted && isGlobalRestricted;
+                const isRestricted = currentEmployee ? (currentEmployee.restrictEarlyCheckIn !== false) : true;
                 const isBefore9 = now.getHours() < 9;
 
                 if (isRestricted && isBefore9) {

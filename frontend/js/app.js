@@ -523,31 +523,6 @@ async function toggleMaintenanceMode(isOn) {
     }
 }
 
-async function toggleEarlyCheckInRestriction(isOn) {
-    const card = document.getElementById('early-checkin-card');
-    const toggle = document.getElementById('early-checkin-toggle');
-    const newSettings = { ...globalSettings, restrictEarlyCheckIn: isOn };
-    try {
-        const res = await fetch(`${API_URL}/settings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newSettings)
-        });
-        if (!res.ok) throw new Error("Server responded with error");
-        globalSettings = newSettings;
-        if (card) {
-            if (isOn) {
-                card.classList.add('active-restriction');
-            } else {
-                card.classList.remove('active-restriction');
-            }
-        }
-    } catch (e) {
-        alert('Failed to update early check-in restriction: ' + e.message);
-        if (toggle) toggle.checked = !isOn;
-    }
-}
-
 async function fetchStorageUsage() {
     const usedText = document.getElementById('storage-used-text');
     const progressBar = document.getElementById('storage-progress-bar');
@@ -921,19 +896,7 @@ async function loadDashboard() {
     const todaysAtt = attendanceData.filter(a => a.date === today).length;
     document.getElementById('dash-today-att').innerText = todaysAtt;
 
-    // Sync early check-in toggle and card styles
-    const earlyToggle = document.getElementById('early-checkin-toggle');
-    const earlyCard = document.getElementById('early-checkin-card');
-    if (earlyToggle) {
-        earlyToggle.checked = !!globalSettings.restrictEarlyCheckIn;
-    }
-    if (earlyCard) {
-        if (globalSettings.restrictEarlyCheckIn) {
-            earlyCard.classList.add('active-restriction');
-        } else {
-            earlyCard.classList.remove('active-restriction');
-        }
-    }
+
 
     // Filter Logic
     let filterMonth = document.getElementById('dashboard-month-filter').value;
