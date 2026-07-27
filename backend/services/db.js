@@ -100,9 +100,10 @@ const initDB = () => {
         // Add column if it doesn't exist (migration)
         try {
             db.exec('ALTER TABLE settings ADD COLUMN maintenanceMode INTEGER DEFAULT 0');
-        } catch (e) {
-            // Column likely exists already
-        }
+        } catch (e) {}
+        try {
+            db.exec('ALTER TABLE employees ADD COLUMN restrictEarlyCheckIn INTEGER DEFAULT 1');
+        } catch (e) {}
     }
 
     console.log('Database initialized successfully');

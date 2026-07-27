@@ -269,7 +269,8 @@ function _initSection(sectionId) {
                 const employee_type = typeEl ? typeEl.value : 'daily_wage';
                 const monthlyFareEl = document.getElementById('emp-monthly-fare');
                 const monthly_fare = employee_type === 'fixed_salary' ? (parseFloat(monthlyFareEl?.value) || 0) : 0;
-                const payload = { name, contact, salary, customId, designation, password, employee_type, monthly_fare };
+                const restrictEarlyCheckIn = document.getElementById('emp-restrict-early') ? document.getElementById('emp-restrict-early').checked : true;
+                const payload = { name, contact, salary, customId, designation, password, employee_type, monthly_fare, restrictEarlyCheckIn };
                 if (id) {
                     await fetch(`${API_URL}/employees/${id}`, {
                         method: 'PUT',
@@ -815,7 +816,7 @@ async function importExcelData() {
                     employeeId: r["Employee ID"]?.toString(),
                     amount: r["Amount"],
                     deductionMonth: r["Deduction Month"] || null,
-                    mode: r["Mode"] || 'Cash',
+                    mode: r["Mode"] || 'Online',
                     notes: r["Notes"] || ''
                 })).filter(a => a.employeeId && a.amount);
 
@@ -825,7 +826,7 @@ async function importExcelData() {
                     employeeId: r["Employee ID"]?.toString(),
                     salaryMonth: r["Salary Month"],
                     amount: r["Amount"],
-                    mode: r["Mode"] || 'Cash',
+                    mode: r["Mode"] || 'Online',
                     notes: r["Notes"] || ''
                 })).filter(p => p.employeeId && p.amount);
 
@@ -1987,11 +1988,18 @@ async function loadEmployees() {
             ? '<span style="background:#4f46e5;color:white;font-size:0.72em;padding:2px 8px;border-radius:20px;font-weight:600;">&#128084; Supervisor</span>'
             : '<span style="background:#10b981;color:white;font-size:0.72em;padding:2px 8px;border-radius:20px;font-weight:600;">&#128119; Worker</span>';
         const salaryLabel = isFixed ? `₹${emp.salary}/mo` : `₹${emp.salary}/day`;
+        const isRestricted = emp.restrictEarlyCheckIn !== false;
         tr.innerHTML = `
             <td data-label="Name">${emp.name}</td>
             <td data-label="Contact">${emp.contact}</td>
             <td data-label="Type">${typeBadge}</td>
             <td data-label="Salary">${salaryLabel}</td>
+            <td data-label="9 AM RESTRICTION" style="text-align:center;">
+                <label class="switch-sm">
+                    <input type="checkbox" ${isRestricted ? 'checked' : ''} onchange="toggleEmployeeEarlyCheckIn('${emp.id}', this.checked)">
+                    <span class="slider"></span>
+                </label>
+            </td>
             <td data-label="Actions">
                 <div class="action-buttons">
                     <button class="btn" style="background: var(--warning); color: white; padding: 0.25rem 0.5rem;" onclick="editEmployee('${emp.id}')">✏️</button>
@@ -2001,6 +2009,25 @@ async function loadEmployees() {
         `;
         tbody.appendChild(tr);
     });
+}
+
+async function toggleEmployeeEarlyCheckIn(empId, isChecked) {
+    const emp = employeesData.find(e => e.id === empId);
+    if (!emp) return;
+    const oldVal = emp.restrictEarlyCheckIn;
+    emp.restrictEarlyCheckIn = isChecked;
+    try {
+        const res = await fetch(`${API_URL}/employees/${empId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ restrictEarlyCheckIn: isChecked })
+        });
+        if (!res.ok) throw new Error("Failed to update employee restriction");
+    } catch (e) {
+        emp.restrictEarlyCheckIn = oldVal;
+        alert('Failed to update 9 AM check-in restriction: ' + e.message);
+        loadEmployees();
+    }
 }
 
 function editEmployee(id) {
@@ -2022,6 +2049,9 @@ function editEmployee(id) {
     if (fareEl) fareEl.value = emp.monthly_fare || '';
     toggleMonthlyFareField();
 
+    const restrictEl = document.getElementById('emp-restrict-early');
+    if (restrictEl) restrictEl.checked = emp.restrictEarlyCheckIn !== false;
+
     document.getElementById('emp-submit-btn').innerText = 'Update Employee';
     document.getElementById('emp-cancel-btn').style.display = 'inline-block';
     document.getElementById('employee-form').scrollIntoView({ behavior: 'smooth' });
@@ -2035,6 +2065,9 @@ function resetEmployeeForm() {
     // Hide monthly fare row when form resets (defaults back to daily_wage)
     const fareRow = document.getElementById('emp-monthly-fare-row');
     if (fareRow) fareRow.style.display = 'none';
+
+    const restrictEl = document.getElementById('emp-restrict-early');
+    if (restrictEl) restrictEl.checked = true;
 }
 
 function toggleMonthlyFareField() {
@@ -2769,12 +2802,37 @@ function openPaymentModal(empId, dueAmount) {
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     document.getElementById('pay-salary-month').value = payrollMonthEl ? payrollMonthEl.value || currentMonth : currentMonth;
     document.getElementById('pay-date').valueAsDate = new Date();
+
+    const modeEl = document.getElementById('pay-mode');
+    if (modeEl) modeEl.value = 'Online';
+    const notesEl = document.getElementById('pay-notes');
+    if (notesEl) notesEl.value = '';
+    const screenshotEl = document.getElementById('pay-screenshot');
+    if (screenshotEl) screenshotEl.value = '';
+
+    const form = document.getElementById('payment-form');
+    if (form) {
+        const submitBtn = form.querySelector('[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Confirm Payment';
+        }
+    }
+
     document.getElementById('payment-modal').style.display = 'flex';
 }
 
 function closePaymentModal() {
     document.getElementById('payment-modal').style.display = 'none';
-    document.getElementById('payment-form').reset();
+    const form = document.getElementById('payment-form');
+    if (form) {
+        form.reset();
+        const submitBtn = form.querySelector('[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Confirm Payment';
+        }
+    }
 }
 
 // Payment form listeners are now registered in _initPayrollForms()
@@ -2800,7 +2858,7 @@ function _initPayrollForms() {
             }
 
             const submitBtn = _paymentFormEl.querySelector('[type="submit"]');
-            const origText = submitBtn ? submitBtn.innerText : '';
+            const origText = submitBtn ? submitBtn.innerText : 'Confirm Payment';
             if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = '⏳ Saving...'; }
 
             const formData = new FormData();
@@ -2826,6 +2884,7 @@ function _initPayrollForms() {
             } catch (err) {
                 console.error('Payment save error:', err);
                 alert('❌ Error saving payment: ' + err.message + '\n\nPlease try again.');
+            } finally {
                 if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = origText; }
             }
         });
@@ -2840,7 +2899,7 @@ function _initPayrollForms() {
             const id = document.getElementById('edit-pay-id').value;
 
             const submitBtn = _editPayFormEl.querySelector('[type="submit"]');
-            const origText = submitBtn ? submitBtn.innerText : '';
+            const origText = submitBtn ? submitBtn.innerText : 'Save Changes';
             if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = '⏳ Updating...'; }
 
             const formData = new FormData();
@@ -2867,6 +2926,7 @@ function _initPayrollForms() {
             } catch (err) {
                 console.error('Edit payment error:', err);
                 alert('❌ Error updating payment: ' + err.message);
+            } finally {
                 if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = origText; }
             }
         });
@@ -2889,15 +2949,33 @@ async function openEditPaymentModal(paymentId) {
     document.getElementById('edit-pay-id').value = payment.id;
     document.getElementById('edit-pay-amount').value = payment.amount;
     document.getElementById('edit-pay-date').value = payment.date;
-    document.getElementById('edit-pay-mode').value = payment.mode || 'Cash';
+    document.getElementById('edit-pay-mode').value = payment.mode || 'Online';
     document.getElementById('edit-pay-notes').value = payment.notes || '';
     document.getElementById('edit-pay-screenshot').value = '';
+
+    const form = document.getElementById('edit-payment-form');
+    if (form) {
+        const submitBtn = form.querySelector('[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Save Changes';
+        }
+    }
+
     document.getElementById('edit-payment-modal').style.display = 'flex';
 }
 
 function closeEditPaymentModal() {
     document.getElementById('edit-payment-modal').style.display = 'none';
-    document.getElementById('edit-payment-form').reset();
+    const form = document.getElementById('edit-payment-form');
+    if (form) {
+        form.reset();
+        const submitBtn = form.querySelector('[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Save Changes';
+        }
+    }
 }
 
 async function deletePaymentRecord(paymentId) {

@@ -24,7 +24,8 @@ router.post('/', async (req, res) => {
             normalHours: req.body.normalHours || 8.5,
             slabBaseHours: req.body.slabBaseHours || 6,
             employee_type: req.body.employee_type || 'daily_wage', // 'daily_wage' | 'fixed_salary'
-            monthly_fare: parseFloat(req.body.monthly_fare) || 0   // Monthly fare for fixed_salary supervisors
+            monthly_fare: parseFloat(req.body.monthly_fare) || 0,  // Monthly fare for fixed_salary supervisors
+            restrictEarlyCheckIn: req.body.restrictEarlyCheckIn !== undefined ? Boolean(req.body.restrictEarlyCheckIn) : true
         };
         const created = await dbService.createEmployee(newEmployee);
         res.json(created);

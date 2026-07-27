@@ -1697,7 +1697,10 @@
                 // No open shift, and no record for today at all. Ready to start new day.
                 timerContainer.style.display = 'none';
 
-                const isRestricted = allData.settings && allData.settings.restrictEarlyCheckIn;
+                // Per-employee early check-in restriction (defaults to true / ON unless explicitly set to false)
+                const isEmpRestricted = currentEmployee ? (currentEmployee.restrictEarlyCheckIn !== false) : true;
+                const isGlobalRestricted = (allData.settings ? allData.settings.restrictEarlyCheckIn !== false : true);
+                const isRestricted = isEmpRestricted && isGlobalRestricted;
                 const isBefore9 = now.getHours() < 9;
 
                 if (isRestricted && isBefore9) {
@@ -2707,7 +2710,7 @@
             tbody.innerHTML = data.map(pay => `
                 <tr>
                     <td data-label="Date">${formatDateWithDay(pay.date)}</td>
-                    <td data-label="Mode">${pay.mode || 'Cash'}</td>
+                    <td data-label="Mode">${pay.mode || 'Online'}</td>
                     <td data-label="Amount" style="color: var(--secondary); font-weight: 600;">₹${pay.amount}</td>
                     <td data-label="Notes">${pay.notes || '-'}</td>
                     <td data-label="Proof">${pay.screenshot ? `<a href="#" onclick="showPreview('${pay.screenshot}', 'Salary Payment', '${pay.date}', '${pay.amount}'); return false;" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>` : '-'}</td>
@@ -3154,7 +3157,7 @@
                     doc.setFont("helvetica", "normal");
 
                     payments.forEach(p => {
-                        const payDetail = `Paid (${p.date.split('-').reverse().slice(0, 2).join('/')}) [${p.mode || 'Cash'}]`;
+                        const payDetail = `Paid (${p.date.split('-').reverse().slice(0, 2).join('/')}) [${p.mode || 'Online'}]`;
                         doc.text(payDetail, 60, paymentY);
                         doc.text(`(-) Rs. ${parseFloat(p.amount).toFixed(2)}`, 140, paymentY, null, null, "right");
                         paymentY += 6;

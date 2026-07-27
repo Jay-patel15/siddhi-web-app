@@ -203,7 +203,7 @@
                 <input type="hidden" id="pay-emp-id"><input type="hidden" id="pay-salary-month">
                 <div class="form-group"><label>Amount (₹)</label><input type="number" id="pay-amount" required></div>
                 <div class="form-group"><label>Payment Date</label><input type="date" id="pay-date" required></div>
-                <div class="form-group"><label>Mode</label><select id="pay-mode"><option value="Cash">Cash</option><option value="Online">Online/UPI</option><option value="Check">Check</option></select></div>
+                <div class="form-group"><label>Mode</label><select id="pay-mode"><option value="Online" selected>Online/UPI</option><option value="Cash">Cash</option><option value="Check">Check</option></select></div>
                 <div class="form-group"><label>Payment Proof <span style="color:#ef4444;">*</span></label><input type="file" id="pay-screenshot" accept="image/*" required><small style="color:#ef4444;">* Proof is required.</small></div>
                 <div class="form-group"><label>Notes</label><input type="text" id="pay-notes"></div>
                 <button type="submit" class="btn btn-primary btn-block">Confirm Payment</button>
@@ -223,7 +223,7 @@
                 <input type="hidden" id="edit-pay-id">
                 <div class="form-group"><label>Amount (₹)</label><input type="number" id="edit-pay-amount" required></div>
                 <div class="form-group"><label>Payment Date</label><input type="date" id="edit-pay-date" required></div>
-                <div class="form-group"><label>Mode</label><select id="edit-pay-mode"><option value="Cash">Cash</option><option value="Online">Online/UPI</option><option value="Check">Check</option></select></div>
+                <div class="form-group"><label>Mode</label><select id="edit-pay-mode"><option value="Online" selected>Online/UPI</option><option value="Cash">Cash</option><option value="Check">Check</option></select></div>
                 <div class="form-group"><label>Notes</label><input type="text" id="edit-pay-notes"></div>
                 <div class="form-group"><label>Replace Screenshot (optional)</label><input type="file" id="edit-pay-screenshot" accept="image/*"></div>
                 <button type="submit" class="btn btn-primary btn-block">Save Changes</button>
