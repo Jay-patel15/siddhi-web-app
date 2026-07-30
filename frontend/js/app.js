@@ -527,11 +527,12 @@ async function fetchHolidays() {
     }
 }
 
-function loadSettingsForm() {
-    document.getElementById('set-standard-hours').value = globalSettings.standardHours;
-    document.getElementById('set-slab-hours').value = globalSettings.slabHours;
+async function loadSettingsForm() {
+    await fetchSettings();
+    document.getElementById('set-standard-hours').value = globalSettings.standardHours || 8.5;
+    document.getElementById('set-slab-hours').value = globalSettings.slabHours || 6;
     // Sync maintenance toggle
-    const isOn = !!globalSettings.maintenanceMode;
+    const isOn = !!(globalSettings.maintenanceMode || globalSettings.maintenance_mode);
     const toggle = document.getElementById('maintenance-toggle');
     const card = document.getElementById('maintenance-card');
     if (toggle) toggle.checked = isOn;
@@ -548,7 +549,7 @@ function loadSettingsForm() {
 
 async function resetSettings() {
     if (!confirm('Reset to defaults (8.5h / 6h)?')) return;
-    const defaults = { standardHours: 8.5, slabHours: 6 };
+    const defaults = { standardHours: 8.5, slabHours: 6, maintenanceMode: false, maintenance_mode: false };
     await fetch(`${API_URL}/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -560,24 +561,30 @@ async function resetSettings() {
 }
 
 async function toggleMaintenanceMode(isOn) {
-    const label = document.getElementById('maintenance-status-label');
     const card = document.getElementById('maintenance-card');
-    const newSettings = { ...globalSettings, maintenanceMode: isOn };
+    const newSettings = {
+        standardHours: parseFloat(document.getElementById('set-standard-hours').value || globalSettings.standardHours || 8.5),
+        slabHours: parseFloat(document.getElementById('set-slab-hours').value || globalSettings.slabHours || 6),
+        maintenanceMode: isOn
+    };
     try {
-        await fetch(`${API_URL}/settings`, {
+        const res = await fetch(`${API_URL}/settings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(newSettings)
         });
-        globalSettings = newSettings;
+        if (!res.ok) throw new Error(`Server status ${res.status}`);
+        const saved = await res.json();
+        globalSettings = { ...globalSettings, ...saved, maintenanceMode: isOn, maintenance_mode: isOn };
         if (card) {
             card.style.borderColor = isOn ? '#f87171' : '#6ee7b7';
             card.style.background = isOn ? '#fff1f2' : '#f0fdf4';
         }
     } catch (e) {
-        alert('Failed to update maintenance mode.');
-        // Revert toggle on error
-        document.getElementById('maintenance-toggle').checked = !isOn;
+        console.error('Failed to update maintenance mode:', e);
+        alert('Failed to update maintenance mode: ' + e.message);
+        const toggle = document.getElementById('maintenance-toggle');
+        if (toggle) toggle.checked = !isOn;
     }
 }
 

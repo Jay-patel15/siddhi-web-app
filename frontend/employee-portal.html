@@ -1469,7 +1469,7 @@
             try {
                 const initSet = await fetch(`${API_URL}/api/settings`);
                 const initSetData = await initSet.json();
-                if (initSetData && initSetData.maintenanceMode) {
+                if (initSetData && (initSetData.maintenanceMode || initSetData.maintenance_mode)) {
                     const overlay = document.getElementById('maintenance-overlay');
                     if (overlay) {
                         overlay.style.display = 'flex';
@@ -2233,7 +2233,7 @@
                 // --- UPDATE UI WITH SETTINGS DATA ---
                 const standardHours = allData.settings.standardHours || 8.5;
                 // --- MAINTENANCE MODE CHECK ---
-                if (allData.settings && allData.settings.maintenanceMode) {
+                if (allData.settings && (allData.settings.maintenanceMode || allData.settings.maintenance_mode)) {
                     const overlay = document.getElementById('maintenance-overlay');
                     if (overlay) {
                         overlay.style.display = 'flex';

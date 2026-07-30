@@ -443,38 +443,46 @@ const deletePayment = async (id) => {
 
 const getSettings = async () => {
     return retry(async () => {
-        const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
-        if (error) {
-            // If no settings found, return defaults (or create them)
-            if (error.code === 'PGRST116') { // specific error for 0 rows
-                return { standardHours: 8.5, slabHours: 6, maintenanceMode: false, restrictEarlyCheckIn: false };
+        let { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
+        if (error || !data) {
+            const defaultSet = { id: 1, standardHours: 8.5, slabHours: 6, maintenanceMode: false };
+            try {
+                const { data: upsertData } = await supabase.from('settings').upsert([defaultSet]).select().single();
+                data = upsertData || defaultSet;
+            } catch (e) {
+                data = defaultSet;
             }
-            throw new Error(error.message);
         }
-        const result = data || { standardHours: 8.5, slabHours: 6, maintenanceMode: false, restrictEarlyCheckIn: false };
-        // Ensure booleans are always proper booleans
-        result.maintenanceMode = Boolean(result.maintenanceMode);
-        result.restrictEarlyCheckIn = Boolean(result.restrictEarlyCheckIn);
-        return result;
+
+        const isMaintenance = Boolean(data.maintenanceMode !== undefined ? data.maintenanceMode : data.maintenance_mode);
+
+        return {
+            id: 1,
+            standardHours: parseFloat(data.standardHours || 8.5),
+            slabHours: parseFloat(data.slabHours || 6),
+            maintenanceMode: isMaintenance,
+            maintenance_mode: isMaintenance
+        };
     });
 };
 
 const updateSettings = async (settings) => {
     return retry(async () => {
-        // Build a clean payload with only known fields
+        const isMaintenance = settings.maintenanceMode !== undefined ? Boolean(settings.maintenanceMode) : Boolean(settings.maintenance_mode);
+
         const payload = {
-            standardHours: settings.standardHours,
-            slabHours: settings.slabHours,
-            maintenanceMode: settings.maintenanceMode !== undefined ? Boolean(settings.maintenanceMode) : false,
-            restrictEarlyCheckIn: settings.restrictEarlyCheckIn !== undefined ? Boolean(settings.restrictEarlyCheckIn) : false
+            standardHours: parseFloat(settings.standardHours || 8.5),
+            slabHours: parseFloat(settings.slabHours || 6),
+            maintenanceMode: isMaintenance
         };
+
         const { data, error } = await supabase.from('settings').update(payload).eq('id', 1).select().single();
-        if (error) throw new Error(error.message);
-        if (data) {
-            data.maintenanceMode = Boolean(data.maintenanceMode);
-            data.restrictEarlyCheckIn = Boolean(data.restrictEarlyCheckIn);
+        if (error) {
+            const { data: upsertData, error: upsertErr } = await supabase.from('settings').upsert([{ id: 1, ...payload }]).select().single();
+            if (upsertErr) throw new Error(upsertErr.message);
+            return { ...(upsertData || payload), maintenanceMode: isMaintenance, maintenance_mode: isMaintenance };
         }
-        return data;
+        return { ...(data || payload), maintenanceMode: isMaintenance, maintenance_mode: isMaintenance };
     });
 };
 
