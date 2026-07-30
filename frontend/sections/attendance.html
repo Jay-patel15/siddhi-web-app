@@ -34,6 +34,7 @@
             <li class="nav-item" data-section="employees"  onclick="location.href='/sections/employees.html'">👥 Employees</li>
             <li class="nav-item" data-section="attendance" onclick="location.href='/sections/attendance.html'">🕒 Attendance</li>
             <li class="nav-item" data-section="advance"    onclick="location.href='/sections/advance.html'">💲 Advance Payments</li>
+            <li class="nav-item" data-section="debitNotes" onclick="location.href='/sections/debitNotes.html'">📋 Debit Notes</li>
             <li class="nav-item" data-section="payroll"    onclick="location.href='/sections/payroll.html'">📄 Payroll</li>
             <li class="nav-item" data-section="uploads"    onclick="location.href='/sections/uploads.html'">📷 Uploads</li>
             <li class="nav-item" data-section="attPhotos"  onclick="location.href='/sections/attPhotos.html'">📸 Att. Photos</li>
@@ -58,26 +59,36 @@
                     <h3>Mark Daily Attendance</h3>
                     <form id="attendance-form">
                         <input type="hidden" id="att-id">
-                        <div class="form-group"><label>Date</label><input type="date" id="att-date" required></div>
-                        <div class="form-group"><label>Employee</label><select id="att-employee" required><option value="">Select Employee</option></select></div>
-
-                        <div class="switch-wrapper">
-                            <label class="switch"><input type="checkbox" id="att-slab-mode"><span class="slider round"></span></label>
-                            <div><strong>Slab Piping Mode (Enable after 10.30 hrs)</strong><p style="font-size:0.8rem;color:var(--gray)">Toggle ON for fixed slab payment (8.5h + 6h Bonus)</p></div>
+                        <div class="form-group grid-2">
+                            <div><label>Date</label><input type="date" id="att-date" required></div>
+                            <div><label>Employee</label><select id="att-employee" required><option value="">Select Employee</option></select></div>
                         </div>
 
-                        <div class="switch-wrapper">
-                            <label class="switch"><input type="checkbox" id="att-sunday-mode"><span class="slider round"></span></label>
-                            <div><strong>Sunday / Full Day Mode</strong><p style="font-size:0.8rem;color:var(--gray)">Toggle ON to count as a full day salary regardless of hours worked.</p></div>
+                        <div class="form-group grid-2" style="align-items:center;">
+                            <div class="switch-wrapper" style="margin:0;">
+                                <label class="switch"><input type="checkbox" id="att-slab-mode"><span class="slider round"></span></label>
+                                <div><strong>Slab Piping Mode (Enable after 10.30 hrs)</strong><p style="font-size:0.8rem;color:var(--gray);margin:0;">Toggle ON for fixed slab payment (8.5h + 6h Bonus)</p></div>
+                            </div>
+                            <div class="switch-wrapper" style="margin:0;">
+                                <label class="switch"><input type="checkbox" id="att-sunday-mode"><span class="slider round"></span></label>
+                                <div><strong>Sunday / Full Day Mode</strong><p style="font-size:0.8rem;color:var(--gray);margin:0;">Toggle ON to count as a full day salary regardless of hours worked.</p></div>
+                            </div>
                         </div>
 
-                        <div class="form-group"><label>Time In</label><input type="time" id="att-time-in"></div>
-                        <div class="form-group"><label>Time Out</label><input type="time" id="att-time-out"></div>
-                        <div class="form-group"><label>Daily Fare (₹)</label><input type="number" id="att-fare" placeholder="0"></div>
+                        <div class="form-group grid-2">
+                            <div><label>Time In</label><input type="time" id="att-time-in"></div>
+                            <div><label>Time Out</label><input type="time" id="att-time-out"></div>
+                        </div>
 
-                        <button type="submit" class="btn btn-primary btn-block" id="att-submit-btn">Submit Attendance</button>
-                        <button type="button" class="btn btn-block" id="att-cancel-btn"
-                            style="display:none;background:var(--gray);color:white;margin-top:0.5rem;" onclick="resetAttendanceForm()">Cancel Edit</button>
+                        <div class="form-group">
+                            <label>Daily Fare (₹)</label><input type="number" id="att-fare" placeholder="0">
+                        </div>
+
+                        <div class="form-actions" style="margin-top:1rem;">
+                            <button type="submit" class="btn btn-primary" id="att-submit-btn">Submit Attendance</button>
+                            <button type="button" class="btn" id="att-cancel-btn"
+                                style="display:none;background:var(--gray);color:white;" onclick="resetAttendanceForm()">Cancel Edit</button>
+                        </div>
                         <div id="att-result" style="margin-top:1rem;font-weight:bold;color:var(--secondary)"></div>
                     </form>
                 </div>

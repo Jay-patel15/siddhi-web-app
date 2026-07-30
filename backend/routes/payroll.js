@@ -10,6 +10,7 @@ router.get('/', async (req, res) => {
         const employees = await dbService.getAllEmployees();
         const attendance = await dbService.getAllAttendance();
         const advances = await dbService.getAllAdvances();
+        const debitNotes = await dbService.getAllDebitNotes();
         const payments = await dbService.getAllPayments();
 
         const settingsData = await dbService.getSettings();
@@ -27,6 +28,12 @@ router.get('/', async (req, res) => {
             const empAdv = advances.filter(a => {
                 if (String(a.employeeId) !== String(emp.id)) return false;
                 const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
+                return deduct === month;
+            });
+
+            const empDebit = debitNotes.filter(d => {
+                if (String(d.employeeId) !== String(emp.id)) return false;
+                const deduct = d.deductionMonth || (d.date ? d.date.substring(0, 7) : '');
                 return deduct === month;
             });
 
@@ -76,19 +83,19 @@ router.get('/', async (req, res) => {
             }
 
             const totalAdvance = empAdv.reduce((sum, adv) => sum + (parseFloat(adv.amount) || 0), 0);
+            const totalDebitNotes = empDebit.reduce((sum, deb) => sum + (parseFloat(deb.amount) || 0), 0);
 
             // --- Previous Balance Calculation ---
             let previousBalance = 0;
 
             if (isSupervisor) {
-                // For supervisors: count past months they were active (based on payment history or advances)
-                // Get all past salary months from payments
+                // For supervisors: count past months they were active (based on payment history, advances, or debit notes)
                 const pastPayMonths = new Set(
                     payments
                         .filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth < month)
                         .map(p => p.salaryMonth)
                 );
-                // Also include months where advances were deducted
+                // Include months where advances were deducted
                 advances
                     .filter(a => {
                         if (String(a.employeeId) !== String(emp.id)) return false;
@@ -99,12 +106,23 @@ router.get('/', async (req, res) => {
                         const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
                         pastPayMonths.add(deduct);
                     });
+                // Include months where debit notes were deducted
+                debitNotes
+                    .filter(d => {
+                        if (String(d.employeeId) !== String(emp.id)) return false;
+                        const deduct = d.deductionMonth || (d.date ? d.date.substring(0, 7) : '');
+                        return deduct < month;
+                    })
+                    .forEach(d => {
+                        const deduct = d.deductionMonth || (d.date ? d.date.substring(0, 7) : '');
+                        pastPayMonths.add(deduct);
+                    });
 
                 const pastMonthsCount = pastPayMonths.size;
                 const monthlyTotal = fixedMonthlySalary + (parseFloat(emp.monthly_fare) || 0);
                 const pastEarningsSupervisor = monthlyTotal * pastMonthsCount;
 
-                const pastDeductionsSupervisor = advances
+                const pastAdvSupervisor = advances
                     .filter(a => {
                         if (String(a.employeeId) !== String(emp.id)) return false;
                         const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
@@ -112,11 +130,19 @@ router.get('/', async (req, res) => {
                     })
                     .reduce((sum, adv) => sum + (parseFloat(adv.amount) || 0), 0);
 
+                const pastDebitSupervisor = debitNotes
+                    .filter(d => {
+                        if (String(d.employeeId) !== String(emp.id)) return false;
+                        const deduct = d.deductionMonth || (d.date ? d.date.substring(0, 7) : '');
+                        return deduct < month;
+                    })
+                    .reduce((sum, deb) => sum + (parseFloat(deb.amount) || 0), 0);
+
                 const pastPaymentsSupervisor = payments
                     .filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth < month)
                     .reduce((sum, p) => sum + p.amount, 0);
 
-                previousBalance = Math.round(pastEarningsSupervisor - pastDeductionsSupervisor - pastPaymentsSupervisor);
+                previousBalance = Math.round(pastEarningsSupervisor - pastAdvSupervisor - pastDebitSupervisor - pastPaymentsSupervisor);
             } else {
                 const pastAtt = attendance.filter(a => String(a.employeeId) === String(emp.id) && a.date < `${month}-01`);
                 let pastEarnings = 0;
@@ -150,15 +176,22 @@ router.get('/', async (req, res) => {
                     const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
                     return deduct < month;
                 });
-                const pastDeductions = pastAdv.reduce((sum, adv) => sum + (parseFloat(adv.amount) || 0), 0);
+                const pastAdvDeductions = pastAdv.reduce((sum, adv) => sum + (parseFloat(adv.amount) || 0), 0);
+
+                const pastDeb = debitNotes.filter(d => {
+                    if (String(d.employeeId) !== String(emp.id)) return false;
+                    const deduct = d.deductionMonth || (d.date ? d.date.substring(0, 7) : '');
+                    return deduct < month;
+                });
+                const pastDebDeductions = pastDeb.reduce((sum, deb) => sum + (parseFloat(deb.amount) || 0), 0);
 
                 const pastPay = payments.filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth < month);
                 const pastPaymentsTotal = pastPay.reduce((sum, p) => sum + p.amount, 0);
 
-                previousBalance = Math.round(pastEarnings - pastDeductions - pastPaymentsTotal);
+                previousBalance = Math.round(pastEarnings - pastAdvDeductions - pastDebDeductions - pastPaymentsTotal);
             }
 
-            const currentMonthNet = totalSalary + totalFare - totalAdvance;
+            const currentMonthNet = totalSalary + totalFare - totalAdvance - totalDebitNotes;
             const netPayable = Math.round(currentMonthNet + previousBalance);
             const remainingDue = netPayable - totalPaid;
 
@@ -169,6 +202,7 @@ router.get('/', async (req, res) => {
                 salaryEarned: Math.round(totalSalary),
                 fareTotal: totalFare,
                 advancePaid: totalAdvance,
+                debitNotesDeducted: totalDebitNotes,
                 previousBalance: previousBalance,
                 currentMonthNet: Math.round(currentMonthNet),
                 finalPayable: netPayable,

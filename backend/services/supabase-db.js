@@ -104,6 +104,9 @@ const deleteEmployee = async (id) => {
         // 2. Delete associated Advances
         await supabase.from('advances').delete().eq('employeeId', id);
 
+        // Delete associated Debit Notes
+        await supabase.from('debit_notes').delete().eq('employeeId', id);
+
         // 3. Delete associated Payments
         await supabase.from('payments').delete().eq('employeeId', id);
 
@@ -255,6 +258,127 @@ const deleteAdvance = async (id) => {
     });
 };
 
+// ==================== DEBIT NOTES ====================
+
+const getAllDebitNotes = async () => {
+    return retry(async () => {
+        let allData = [];
+        let from = 0;
+        let to = 999;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabase.from('debit_notes').select('*').range(from, to);
+            if (error) throw new Error(error.message);
+            if (data && data.length > 0) {
+                // Ensure employeeId property is populated regardless of DB column name
+                data.forEach(d => {
+                    if (!d.employeeId && d.empId) d.employeeId = d.empId;
+                    if (!d.empId && d.employeeId) d.empId = d.employeeId;
+                });
+                allData = allData.concat(data);
+                if (data.length < 1000) {
+                    hasMore = false;
+                } else {
+                    from += 1000;
+                    to += 1000;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+        return allData;
+    });
+};
+
+const getDebitNoteById = async (id) => {
+    return retry(async () => {
+        const { data, error } = await supabase.from('debit_notes').select('*').eq('id', id).single();
+        if (error) throw new Error(error.message);
+        if (data) {
+            if (!data.employeeId && data.empId) data.employeeId = data.empId;
+            if (!data.empId && data.employeeId) data.empId = data.employeeId;
+        }
+        return data;
+    });
+};
+
+const createDebitNote = async (debitNote) => {
+    return retry(async () => {
+        const payload = { ...debitNote };
+        const empIdVal = payload.employeeId || payload.empId;
+        payload.employeeId = empIdVal;
+        payload.empId = empIdVal;
+
+        try {
+            const { data, error } = await supabase.from('debit_notes').insert([payload]).select().single();
+            if (error) throw error;
+            return data;
+        } catch (err) {
+            const errMsg = err.message || '';
+            if (errMsg.includes('employeeId')) {
+                // DB table has 'empId' column instead of 'employeeId'
+                const fallbackPayload = { ...payload };
+                delete fallbackPayload.employeeId;
+                const { data, error } = await supabase.from('debit_notes').insert([fallbackPayload]).select().single();
+                if (error) throw new Error(error.message);
+                if (data) data.employeeId = data.empId;
+                return data;
+            } else if (errMsg.includes('empId')) {
+                // DB table has 'employeeId' column instead of 'empId'
+                const fallbackPayload = { ...payload };
+                delete fallbackPayload.empId;
+                const { data, error } = await supabase.from('debit_notes').insert([fallbackPayload]).select().single();
+                if (error) throw new Error(error.message);
+                if (data) data.empId = data.employeeId;
+                return data;
+            }
+            throw new Error(errMsg);
+        }
+    }, 2, 800);
+};
+
+const updateDebitNote = async (id, debitNote) => {
+    return retry(async () => {
+        const payload = { ...debitNote };
+        const empIdVal = payload.employeeId || payload.empId;
+        payload.employeeId = empIdVal;
+        payload.empId = empIdVal;
+
+        try {
+            const { data, error } = await supabase.from('debit_notes').update(payload).eq('id', id).select().single();
+            if (error) throw error;
+            return data;
+        } catch (err) {
+            const errMsg = err.message || '';
+            if (errMsg.includes('employeeId')) {
+                const fallbackPayload = { ...payload };
+                delete fallbackPayload.employeeId;
+                const { data, error } = await supabase.from('debit_notes').update(fallbackPayload).eq('id', id).select().single();
+                if (error) throw new Error(error.message);
+                if (data) data.employeeId = data.empId;
+                return data;
+            } else if (errMsg.includes('empId')) {
+                const fallbackPayload = { ...payload };
+                delete fallbackPayload.empId;
+                const { data, error } = await supabase.from('debit_notes').update(fallbackPayload).eq('id', id).select().single();
+                if (error) throw new Error(error.message);
+                if (data) data.empId = data.employeeId;
+                return data;
+            }
+            throw new Error(errMsg);
+        }
+    });
+};
+
+const deleteDebitNote = async (id) => {
+    return retry(async () => {
+        const { error } = await supabase.from('debit_notes').delete().eq('id', id);
+        if (error) throw new Error(error.message);
+        return { success: true };
+    });
+};
+
 // ==================== PAYMENTS ====================
 
 const getAllPayments = async () => {
@@ -392,6 +516,7 @@ const factoryReset = async () => {
     return retry(async () => {
         await supabase.from('attendance').delete().gt('id', ''); // String ID
         await supabase.from('advances').delete().gt('id', '');
+        await supabase.from('debit_notes').delete().gt('id', '');
         await supabase.from('payments').delete().gt('id', '');
         await supabase.from('employees').delete().gt('id', '');
         await supabase.from('holidays').delete().gt('id', 0); // Integer ID
@@ -567,6 +692,13 @@ const importData = async (payload) => {
             results.advances = advances.length;
         }
 
+        // Debit Notes
+        if (payload.debitNotes && payload.debitNotes.length > 0) {
+            const { error } = await supabase.from('debit_notes').upsert(payload.debitNotes, { onConflict: 'id' });
+            if (error) throw new Error("Debit Notes Import Error: " + error.message);
+            results.debitNotes = payload.debitNotes.length;
+        }
+
         // Payments
         if (payments && payments.length > 0) {
             const { error } = await supabase.from('payments').upsert(payments, { onConflict: 'id' });
@@ -596,6 +728,11 @@ module.exports = {
     createAdvance,
     updateAdvance,
     deleteAdvance,
+    getAllDebitNotes,
+    getDebitNoteById,
+    createDebitNote,
+    updateDebitNote,
+    deleteDebitNote,
     getAllPayments,
     getPaymentById,
     createPayment,

@@ -1199,12 +1199,17 @@
                         <div class="stat-title">Gross Earned</div>
                         <div class="stat-value" id="stat-gross">₹0</div>
                     </div>
+                    <div class="stat-card" style="background:#fff1f2;border:1px solid #fecdd3;" id="card-debit-notes">
+                        <div class="stat-title" style="color:#be123c;">Tool Deductions</div>
+                        <div class="stat-value" style="color:#e11d48;" id="stat-debit-notes">₹0</div>
+                    </div>
                 </div>
 
                 <!-- Mobile Navigation -->
                 <div class="mobile-nav">
                     <div class="nav-item active" onclick="switchTab('attendance')">Attendance</div>
                     <div class="nav-item" onclick="switchTab('advances')">Advances</div>
+                    <div class="nav-item" onclick="switchTab('debitNotes')">Debit Notes</div>
                     <div class="nav-item" onclick="switchTab('payments')">Payments</div>
                 </div>
 
@@ -1251,6 +1256,26 @@
                             </tbody>
                         </table>
                         <p id="advances-empty" class="empty-msg" style="display: none;">No advances for this month.</p>
+                    </div>
+                </div>
+
+                <!-- Debit Notes / Tool Deductions -->
+                <div id="section-debitNotes" class="mobile-section">
+                    <h4 class="section-title">Debit Notes (Tool Misplacements / Fines)</h4>
+                    <div class="table-container bordered">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Reason / Details</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody id="debitnotes-table">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                        <p id="debitnotes-empty" class="empty-msg" style="display: none;">No debit notes for this month.</p>
                     </div>
                 </div>
 
@@ -2189,10 +2214,11 @@
         async function loadEmployeeData(employeeId) {
             try {
                 // Fetch all data
-                const [empRes, attRes, advRes, payRes, setRes] = await Promise.all([
+                const [empRes, attRes, advRes, debRes, payRes, setRes] = await Promise.all([
                     fetch(`${API_URL}/api/employees`),
                     fetch(`${API_URL}/api/attendance`),
                     fetch(`${API_URL}/api/advances`),
+                    fetch(`${API_URL}/api/debit-notes`),
                     fetch(`${API_URL}/api/payments`),
                     fetch(`${API_URL}/api/settings`)
                 ]);
@@ -2200,6 +2226,7 @@
                 allData.employees = await empRes.json();
                 allData.attendance = await attRes.json();
                 allData.advances = await advRes.json();
+                allData.debitNotes = await debRes.json();
                 allData.payments = await payRes.json();
                 allData.settings = await setRes.json();
 
@@ -2247,6 +2274,7 @@
                     if (mobileNav) {
                         mobileNav.innerHTML = `
                             <div class="nav-item active" onclick="switchTab('advances')">Advances</div>
+                            <div class="nav-item" onclick="switchTab('debitNotes')">Debit Notes</div>
                             <div class="nav-item" onclick="switchTab('payments')">Payments</div>
                         `;
                         // Make advances the default active tab
@@ -2279,6 +2307,7 @@
                     if (mobileNav) mobileNav.innerHTML = `
                         <div class="nav-item active" onclick="switchTab('attendance')">Attendance</div>
                         <div class="nav-item" onclick="switchTab('advances')">Advances</div>
+                        <div class="nav-item" onclick="switchTab('debitNotes')">Debit Notes</div>
                         <div class="nav-item" onclick="switchTab('payments')">Payments</div>
                     `;
                 }
@@ -2334,13 +2363,19 @@
             console.log('My Attendance:', myAttendance);
 
             // Filter advances for this employee and month
-            const myAdvances = allData.advances.filter(a =>
+            const myAdvances = (allData.advances || []).filter(a =>
                 String(a.employeeId) === String(currentEmployee.id) &&
                 (a.date.startsWith(month) || a.deductionMonth === month)
             );
 
+            // Filter debit notes for this employee and month
+            const myDebitNotes = (allData.debitNotes || []).filter(d =>
+                String(d.employeeId) === String(currentEmployee.id) &&
+                (d.date.startsWith(month) || d.deductionMonth === month)
+            );
+
             // Filter payments for this employee and month
-            const myPayments = allData.payments.filter(p =>
+            const myPayments = (allData.payments || []).filter(p =>
                 String(p.employeeId) === String(currentEmployee.id) &&
                 (p.date.startsWith(month) || p.salaryMonth === month)
             );
@@ -2353,6 +2388,9 @@
                 const totalAdvancesFixed = myAdvances
                     .filter(a => a.deductionMonth === month)
                     .reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+                const totalDebitNotesFixed = myDebitNotes
+                    .filter(d => d.deductionMonth === month)
+                    .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
                 const totalPaymentsFixed = myPayments
                     .filter(p => p.salaryMonth === month)
                     .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
@@ -2367,14 +2405,26 @@
                 });
                 const pastDeductionsFixed = pastAdvFixed.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
 
-                // Previous balance = past (salary+fare) earned - past advances - past payments
+                const pastDebFixed = (allData.debitNotes || []).filter(d => {
+                    if (String(d.employeeId) !== String(currentEmployee.id)) return false;
+                    const dedMonth = d.deductionMonth || (d.date ? d.date.substring(0, 7) : '');
+                    return dedMonth < month;
+                });
+                const pastDebDeductionsFixed = pastDebFixed.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+
+                // Previous balance = past (salary+fare) earned - past advances - past debit notes - past payments
                 const pastMonthsSet = new Set([
                     ...allData.payments.filter(p => String(p.employeeId) === String(currentEmployee.id) && p.salaryMonth < month).map(p => p.salaryMonth),
-                    ...pastAdvFixed.map(a => a.deductionMonth || (a.date ? a.date.substring(0, 7) : ''))
+                    ...pastAdvFixed.map(a => a.deductionMonth || (a.date ? a.date.substring(0, 7) : '')),
+                    ...pastDebFixed.map(d => d.deductionMonth || (d.date ? d.date.substring(0, 7) : ''))
                 ]);
-                const pastBalance = Math.round((monthlyTotal * pastMonthsSet.size) - pastDeductionsFixed - pastPaidFixed);
+                const pastBalance = Math.round((monthlyTotal * pastMonthsSet.size) - pastDeductionsFixed - pastDebDeductionsFixed - pastPaidFixed);
 
-                const netDue = Math.round(monthlyTotal - totalAdvancesFixed - totalPaymentsFixed + pastBalance);
+                const netDue = Math.round(monthlyTotal - totalAdvancesFixed - totalDebitNotesFixed - totalPaymentsFixed + pastBalance);
+
+                // Update "Tool Deductions" card for supervisor
+                const debitCardVal = document.getElementById('stat-debit-notes');
+                if (debitCardVal) debitCardVal.innerText = `₹${Math.round(totalDebitNotesFixed)}`;
 
                 // Update "Net Payable" card for supervisor
                 const netCard = document.querySelector('.payable-card');
@@ -2384,10 +2434,10 @@
                     const val = document.getElementById('stat-net');
                     if (val) {
                         if (netDue <= 0 && totalPaymentsFixed > 0) {
-                            val.innerHTML = '<span style="font-weight:bold;">SETTLED</span><div style="font-size:0.6em;opacity:0.8;">Advance: &#8377;' + Math.round(totalAdvancesFixed) + ' | Paid: &#8377;' + Math.round(totalPaymentsFixed) + '</div>';
+                            val.innerHTML = '<span style="font-weight:bold;">SETTLED</span><div style="font-size:0.6em;opacity:0.8;">Adv: ₹' + Math.round(totalAdvancesFixed) + ' | Debit: ₹' + Math.round(totalDebitNotesFixed) + ' | Paid: ₹' + Math.round(totalPaymentsFixed) + '</div>';
                         } else {
-                            const fareNote = monthlyFare > 0 ? ' + Fare: &#8377;' + Math.round(monthlyFare) : '';
-                            val.innerHTML = '&#8377;' + netDue + '<div style="font-size:0.6em;opacity:0.8;margin-top:2px;">Salary: &#8377;' + Math.round(monthlySalary) + fareNote + ' | Advance: &#8377;' + Math.round(totalAdvancesFixed) + ' | Paid: &#8377;' + Math.round(totalPaymentsFixed) + '</div>';
+                            const fareNote = monthlyFare > 0 ? ' + Fare: ₹' + Math.round(monthlyFare) : '';
+                            val.innerHTML = '₹' + netDue + '<div style="font-size:0.6em;opacity:0.8;margin-top:2px;">Salary: ₹' + Math.round(monthlySalary) + fareNote + ' | Adv: ₹' + Math.round(totalAdvancesFixed) + ' | Debit: ₹' + Math.round(totalDebitNotesFixed) + ' | Paid: ₹' + Math.round(totalPaymentsFixed) + '</div>';
                         }
                     }
                     netCard.style.display = '';
@@ -2407,8 +2457,9 @@
                     prevCard.style.display = '';
                 }
 
-                // Update tables (advances + payments only)
+                // Update tables
                 updateAdvancesTable(myAdvances);
+                updateDebitNotesTable(myDebitNotes);
                 updatePaymentsTable(myPayments);
                 return; // Skip all daily-wage logic below
             }
@@ -2468,6 +2519,10 @@
                 .filter(a => a.deductionMonth === month)
                 .reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
 
+            const totalDebitNotes = myDebitNotes
+                .filter(d => d.deductionMonth === month)
+                .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+
             const totalPayments = myPayments
                 .filter(p => p.salaryMonth === month)
                 .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
@@ -2480,7 +2535,6 @@
             // 1. Past Earnings
             const pastAtt = allData.attendance.filter(a => String(a.employeeId) === String(currentEmployee.id) && a.date < `${month}-01`);
             let pastEarnings = 0;
-
 
             pastAtt.forEach(att => {
                 const wh = parseFloat(att.workedHours);
@@ -2506,18 +2560,27 @@
             });
             const pastDeductions = pastAdv.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
 
-            // 3. Past Payments
+            // 3. Past Debit Notes
+            const pastDeb = (allData.debitNotes || []).filter(d => {
+                if (String(d.employeeId) !== String(currentEmployee.id)) return false;
+                const dedMonth = d.deductionMonth || (d.date ? d.date.substring(0, 7) : '');
+                return dedMonth < month;
+            });
+            const pastDebDeductions = pastDeb.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+
+            // 4. Past Payments
             const pastPay = allData.payments.filter(p => String(p.employeeId) === String(currentEmployee.id) && p.salaryMonth < month);
             const pastPaid = pastPay.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
-            previousBalance = Math.round(pastEarnings - pastDeductions - pastPaid);
+            previousBalance = Math.round(pastEarnings - pastDeductions - pastDebDeductions - pastPaid);
 
-
-            const netPayable = totalEarned - totalAdvances - totalPayments + previousBalance;
+            const netPayable = totalEarned - totalAdvances - totalDebitNotes - totalPayments + previousBalance;
 
             // Update stats
             document.getElementById('stat-present').innerText = daysPresent;
             document.getElementById('stat-absent').innerText = daysAbsent;
+            const debitCardVal = document.getElementById('stat-debit-notes');
+            if (debitCardVal) debitCardVal.innerText = `₹${Math.round(totalDebitNotes)}`;
 
             // Update New Cards
             const normEl = document.getElementById('stat-normal-hours');
@@ -2577,6 +2640,7 @@
             // Update tables
             updateAttendanceTable(myAttendance);
             updateAdvancesTable(myAdvances);
+            updateDebitNotesTable(myDebitNotes);
             updatePaymentsTable(myPayments);
         }
 
@@ -2694,6 +2758,28 @@
                 `).join('');
         }
 
+        function updateDebitNotesTable(data) {
+            const tbody = document.getElementById('debitnotes-table');
+            const empty = document.getElementById('debitnotes-empty');
+
+            if (!tbody) return;
+
+            if (data.length === 0) {
+                tbody.innerHTML = '';
+                if (empty) empty.style.display = 'block';
+                return;
+            }
+
+            if (empty) empty.style.display = 'none';
+            tbody.innerHTML = data.map(deb => `
+                <tr>
+                    <td data-label="Date">${formatDateWithDay(deb.date)}</td>
+                    <td data-label="Reason" style="font-weight: 600;">${deb.reason}</td>
+                    <td data-label="Amount" style="color: #e11d48; font-weight: 600;">₹${deb.amount}</td>
+                </tr>
+            `).join('');
+        }
+
         function updatePaymentsTable(data) {
             const tbody = document.getElementById('payments-table');
             const empty = document.getElementById('payments-empty');
@@ -2737,6 +2823,8 @@
         window.closeEnhancedPreview = function () {
             document.getElementById('enhanced-preview-modal').style.display = 'none';
         }
+
+
 
         function downloadPreviewImage() {
             const img = document.getElementById('enhanced-preview-img');

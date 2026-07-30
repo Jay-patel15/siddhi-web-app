@@ -90,6 +90,7 @@ let holidays = [];
 let employeesData = [];
 let attendanceData = [];
 let advancesData = [];
+let debitNotesData = [];
 let paymentsData = []; // Added
 let currentPayrollData = [];
 let currentModalEmployee = null;
@@ -157,6 +158,7 @@ async function init() {
         else if (currentPage === 'employees')  loadEmployees();
         else if (currentPage === 'attendance') loadAttendance();
         else if (currentPage === 'advance')    loadAdvanceForm();
+        else if (currentPage === 'debitNotes') loadDebitNoteForm();
         else if (currentPage === 'payroll')    loadPayroll();
         else if (currentPage === 'uploads')    loadUploadsPage();
         else if (currentPage === 'attPhotos')  loadAttendancePhotos();
@@ -224,6 +226,7 @@ async function showSection(sectionId) {
     else if (sectionId === 'employees') loadEmployees();
     else if (sectionId === 'attendance') loadAttendance();
     else if (sectionId === 'advance') loadAdvanceForm();
+    else if (sectionId === 'debitNotes') loadDebitNoteForm();
     else if (sectionId === 'payroll') loadPayroll();
     else if (sectionId === 'uploads') loadUploadsPage();
     else if (sectionId === 'attPhotos') loadAttendancePhotos();
@@ -433,6 +436,61 @@ function _initSection(sectionId) {
             // so that edit-mode (no new file) works without browser blocking the submit
             const screenshotInput = document.getElementById('adv-screenshot');
             if (screenshotInput) screenshotInput.removeAttribute('required');
+        }
+    }
+
+    if (sectionId === 'debitNotes') {
+        const debitForm = document.getElementById('debit-form');
+        if (debitForm && !debitForm._listenerAdded) {
+            debitForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('debit-id').value;
+                const submitBtn = document.getElementById('debit-submit-btn');
+                const origText = submitBtn ? submitBtn.innerText : '';
+
+                if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = '⏳ Saving...'; }
+
+                try {
+                    const payload = {
+                        employeeId: document.getElementById('debit-employee').value,
+                        amount: document.getElementById('debit-amount').value,
+                        date: document.getElementById('debit-date').value,
+                        deductionMonth: document.getElementById('debit-deduction-month').value,
+                        reason: document.getElementById('debit-reason').value
+                    };
+
+                    if (id) {
+                        const res = await fetch(`${API_URL}/debit-notes/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Update failed');
+                        if (submitBtn) { submitBtn.innerText = '✅ Updated!'; submitBtn.style.background = '#10b981'; }
+                        setTimeout(() => {
+                            resetDebitForm();
+                            loadDebitNoteTable();
+                        }, 700);
+                    } else {
+                        const res = await fetch(`${API_URL}/debit-notes`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Save failed');
+                        if (submitBtn) { submitBtn.innerText = '✅ Saved!'; submitBtn.style.background = '#10b981'; }
+                        setTimeout(() => {
+                            resetDebitForm();
+                            loadDebitNoteTable();
+                        }, 700);
+                    }
+                } catch (err) {
+                    console.error('Debit note save error:', err);
+                    alert('❌ Error: ' + err.message);
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = origText; submitBtn.style.background = ''; }
+                }
+            });
+            debitForm._listenerAdded = true;
         }
     }
 }
@@ -852,14 +910,15 @@ async function loadDashboard() {
     // 1. Fetch all data
     await fetchHolidays();
     try {
-        const [empRes, attRes, advRes, payRes] = await Promise.all([
+        const [empRes, attRes, advRes, debRes, payRes] = await Promise.all([
             fetch(`${API_URL}/employees`),
             fetch(`${API_URL}/attendance`),
             fetch(`${API_URL}/advances`),
+            fetch(`${API_URL}/debit-notes`),
             fetch(`${API_URL}/payments`)
         ]);
 
-        if (!empRes.ok || !attRes.ok || !advRes.ok || !payRes.ok) {
+        if (!empRes.ok || !attRes.ok || !advRes.ok || !debRes.ok || !payRes.ok) {
             throw new Error("Failed to fetch data from server");
         }
 
@@ -872,6 +931,9 @@ async function loadDashboard() {
 
         advancesData = await advRes.json();
         if (!Array.isArray(advancesData)) advancesData = [];
+
+        const debData = await debRes.json();
+        debitNotesData = Array.isArray(debData) ? debData : [];
 
         const payData = await payRes.json();
         paymentsData = Array.isArray(payData) ? payData : [];
@@ -957,11 +1019,16 @@ async function loadDashboard() {
     const totalAdvances = advancesData.filter(a => {
         const dedMonth = a.deductionMonth || a.date.substring(0, 7);
         return dedMonth === currentMonth;
-    }).reduce((sum, a) => sum + a.amount, 0);
+    }).reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+
+    const totalDebitNotes = debitNotesData.filter(d => {
+        const dedMonth = d.deductionMonth || (d.date ? d.date.substring(0, 7) : '');
+        return dedMonth === currentMonth;
+    }).reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
 
     const totalPaid = paymentsData.filter(p => {
         return p.salaryMonth === currentMonth;
-    }).reduce((sum, p) => sum + p.amount, 0);
+    }).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
     // Calculate sum of all employees' previous carry-forward balances
     // Same logic as backend payroll.js — past earnings - past deductions - past payments
@@ -974,13 +1041,20 @@ async function loadDashboard() {
         });
         const pastDeductions = pastAdv.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
 
+        const pastDeb = debitNotesData.filter(d => {
+            if (String(d.employeeId) !== String(emp.id)) return false;
+            const deduct = d.deductionMonth || (d.date ? d.date.substring(0, 7) : '');
+            return deduct < currentMonth;
+        });
+        const pastDebDeductions = pastDeb.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+
         const pastPay = paymentsData.filter(p =>
             String(p.employeeId) === String(emp.id) && p.salaryMonth < currentMonth
         );
         const pastPaymentsTotal = pastPay.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
         if (emp.employee_type === 'fixed_salary') {
-            // Fixed salary: count past months active (from payment history or advance deductions)
+            // Fixed salary: count past months active (from payment history, advances or debit notes)
             const pastPayMonths = new Set(
                 paymentsData
                     .filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth < currentMonth)
@@ -990,11 +1064,15 @@ async function loadDashboard() {
                 const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
                 pastPayMonths.add(deduct);
             });
+            pastDeb.forEach(d => {
+                const deduct = d.deductionMonth || (d.date ? d.date.substring(0, 7) : '');
+                pastPayMonths.add(deduct);
+            });
             const pastMonthsCount = pastPayMonths.size;
             const monthlyTotal = (parseFloat(emp.salary) || 0) + (parseFloat(emp.monthly_fare) || 0);
             const pastEarningsSupervisor = monthlyTotal * pastMonthsCount;
 
-            totalPreviousBalance += Math.round(pastEarningsSupervisor - pastDeductions - pastPaymentsTotal);
+            totalPreviousBalance += Math.round(pastEarningsSupervisor - pastDeductions - pastDebDeductions - pastPaymentsTotal);
             return;
         }
 
@@ -1018,11 +1096,11 @@ async function loadDashboard() {
             pastEarnings += (parseFloat(att.fare) || 0);
         });
 
-        totalPreviousBalance += Math.round(pastEarnings - pastDeductions - pastPaymentsTotal);
+        totalPreviousBalance += Math.round(pastEarnings - pastDeductions - pastDebDeductions - pastPaymentsTotal);
     });
 
-    // Formula: Total Payroll + Previous Balances (carry-forward) - Advances - Paid
-    let totalPendingDues = totalPayroll + totalPreviousBalance - totalAdvances - totalPaid;
+    // Formula: Total Payroll + Previous Balances (carry-forward) - Advances - Debit Notes - Paid
+    let totalPendingDues = totalPayroll + totalPreviousBalance - totalAdvances - totalDebitNotes - totalPaid;
 
     // Show the calculation in the orange box: Total Payroll + Previous Balance = Total
     const totalEarned = totalPayroll + totalPreviousBalance;
@@ -1047,6 +1125,8 @@ async function loadDashboard() {
     document.getElementById('dash-paid').innerText = '₹' + Math.round(totalPaid).toLocaleString();
 
     document.getElementById('dash-advances').innerText = '₹' + Math.round(totalAdvances).toLocaleString();
+    const dashDebitEl = document.getElementById('dash-debit-notes');
+    if (dashDebitEl) dashDebitEl.innerText = '₹' + Math.round(totalDebitNotes).toLocaleString();
 
     // 3. Render Employee Cards
     renderEmployeeCards();
@@ -1691,26 +1771,28 @@ async function updateModalData() {
     const month = currentModalMonth;
 
     // Fetch ALL data fresh to ensure modal is accurate
-    // (Optimization: In a real app, we'd filter on server, but here we fetch all and filter client side)
-    const [attRes, advRes, payRes] = await Promise.all([
+    const [attRes, advRes, debRes, payRes] = await Promise.all([
         fetch(`${API_URL}/attendance`),
         fetch(`${API_URL}/advances`),
+        fetch(`${API_URL}/debit-notes`),
         fetch(`${API_URL}/payments`)
     ]);
 
     // Update Globals so exportToCSV works
     attendanceData = await attRes.json();
     advancesData = await advRes.json();
-    paymentsData = await payRes.json(); // Wait, check if paymentsData global exists? It was 'payments' variable in scope. 
-    // I need to check global declarations at top of file.
+    debitNotesData = await debRes.json();
+    paymentsData = await payRes.json();
 
     const allAttendance = attendanceData;
     const allAdvances = advancesData;
+    const allDebitNotes = debitNotesData;
     const allPayments = paymentsData;
 
     // Filter Data for Specific Employee and Month
     const att = allAttendance.filter(a => String(a.employeeId) === String(emp.id) && a.date.startsWith(month));
     const adv = allAdvances.filter(a => String(a.employeeId) === String(emp.id) && (a.deductionMonth || a.date.substring(0, 7)) === month);
+    const deb = allDebitNotes.filter(d => String(d.employeeId) === String(emp.id) && (d.deductionMonth || (d.date ? d.date.substring(0, 7) : '')) === month);
     const payments = allPayments.filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth === month);
 
     // Calculate Stats
@@ -1909,6 +1991,25 @@ async function updateModalData() {
         `;
         advBody.appendChild(tr);
     });
+
+    // Render Debit Notes Body
+    const debBody = document.getElementById('modal-deb-body');
+    if (debBody) {
+        debBody.innerHTML = '';
+        if (deb.length === 0) {
+            debBody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--gray);">No tool deductions/fines for this month</td></tr>';
+        } else {
+            deb.forEach(d => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td data-label="Date">${d.date}</td>
+                    <td data-label="Amount" style="color:#e11d48; font-weight:bold;">₹${d.amount}</td>
+                    <td data-label="Reason">${d.reason}</td>
+                `;
+                debBody.appendChild(tr);
+            });
+        }
+    }
 
     // Render Payment Body
     const payBody = document.getElementById('modal-pay-body');
@@ -2587,6 +2688,158 @@ async function deleteAdvance(id) {
     loadDashboard();
 }
 
+// --- DEBIT NOTES ---
+async function loadDebitNoteForm() {
+    const res = await fetch(`${API_URL}/employees`);
+    const employees = await res.json();
+
+    const select = document.getElementById('debit-employee');
+    const filterSelect = document.getElementById('debit-filter-employee');
+    const currentVal = select.value;
+    const currentFilterVal = filterSelect ? filterSelect.value : '';
+
+    select.innerHTML = '<option value="">Select Employee</option>';
+    if (filterSelect) {
+        filterSelect.innerHTML = '<option value="">All Employees</option>';
+    }
+
+    employees.sort((a, b) => a.name.localeCompare(b.name));
+
+    employees.forEach(emp => {
+        const isSupervisor = emp.employee_type === 'fixed_salary';
+        const salaryLabel = isSupervisor ? `₹${emp.salary}/mo` : `₹${emp.salary}/day`;
+        const opt = document.createElement('option');
+        opt.value = emp.id;
+        opt.textContent = `${emp.name} (${salaryLabel})`;
+        select.appendChild(opt);
+
+        if (filterSelect) {
+            const fOpt = document.createElement('option');
+            fOpt.value = emp.id;
+            fOpt.innerText = `${emp.name} (${salaryLabel})`;
+            filterSelect.appendChild(fOpt);
+        }
+    });
+
+    if (currentVal) select.value = currentVal;
+    if (filterSelect && currentFilterVal) filterSelect.value = currentFilterVal;
+
+    // Defaults
+    if (!document.getElementById('debit-date').value) {
+        document.getElementById('debit-date').valueAsDate = new Date();
+    }
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    if (!document.getElementById('debit-deduction-month').value) {
+        document.getElementById('debit-deduction-month').value = currentMonth;
+    }
+
+    loadDebitNoteTable();
+}
+
+async function loadDebitNoteTable() {
+    let monthInput = document.getElementById('debit-filter-month');
+    if (monthInput && !monthInput.value) {
+        const now = new Date();
+        monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+    let monthFilter = monthInput ? monthInput.value : '';
+    const empFilter = document.getElementById('debit-filter-employee') ? document.getElementById('debit-filter-employee').value : '';
+
+    const [debitRes, empRes] = await Promise.all([
+        fetch(`${API_URL}/debit-notes`),
+        fetch(`${API_URL}/employees`)
+    ]);
+    debitNotesData = await debitRes.json();
+    const employees = await empRes.json();
+    const empMap = Object.fromEntries(employees.map(e => [e.id, e]));
+
+    // Update KPI Stats
+    const totalAllTime = debitNotesData.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+    const monthDeductions = debitNotesData
+        .filter(d => (d.deductionMonth || (d.date ? d.date.substring(0, 7) : '')) === monthFilter)
+        .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+    
+    const totalStatEl = document.getElementById('debit-stat-total');
+    const monthStatEl = document.getElementById('debit-stat-month');
+    const countStatEl = document.getElementById('debit-stat-count');
+    if (totalStatEl) totalStatEl.innerText = `₹${Math.round(totalAllTime)}`;
+    if (monthStatEl) monthStatEl.innerText = `₹${Math.round(monthDeductions)}`;
+    if (countStatEl) countStatEl.innerText = debitNotesData.length;
+
+    // Filter Logic
+    const filtered = debitNotesData
+        .filter(d => !monthFilter || (d.deductionMonth || (d.date ? d.date.substring(0, 7) : '')) === monthFilter)
+        .filter(d => !empFilter || d.employeeId == empFilter);
+
+    // Sort desc by date
+    const sorted = filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const tbody = document.getElementById('debit-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (sorted.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--gray); padding: 2rem;">No debit notes found for this selection.</td></tr>';
+        return;
+    }
+
+    sorted.forEach(deb => {
+        const empName = empMap[deb.employeeId] ? empMap[deb.employeeId].name : 'Unknown';
+        const dedMonth = deb.deductionMonth || (deb.date ? deb.date.substring(0, 7) : '-');
+        const tr = document.createElement('tr');
+
+        tr.innerHTML = `
+            <td data-label="Date">${deb.date}</td>
+            <td data-label="Employee">${empName}</td>
+            <td data-label="Amount" style="font-weight: bold; color: #e11d48">₹${deb.amount}</td>
+            <td data-label="Deduction Month">${dedMonth}</td>
+            <td data-label="Reason">${deb.reason}</td>
+            <td data-label="Actions">
+                <div class="action-buttons-stacked">
+                    <button class="btn" style="background: var(--warning); color: white; padding: 0.25rem 0.5rem;" onclick="editDebitNote('${deb.id}')">✏️</button>
+                    <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;" onclick="deleteDebitNote('${deb.id}')">🗑️</button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function editDebitNote(id) {
+    const deb = debitNotesData.find(d => d.id === id);
+    if (!deb) return;
+    document.getElementById('debit-id').value = deb.id;
+    document.getElementById('debit-employee').value = deb.employeeId;
+    document.getElementById('debit-amount').value = deb.amount;
+    document.getElementById('debit-date').value = deb.date;
+    document.getElementById('debit-deduction-month').value = deb.deductionMonth || (deb.date ? deb.date.substring(0, 7) : '');
+    document.getElementById('debit-reason').value = deb.reason || '';
+    document.getElementById('debit-submit-btn').innerText = 'Update Debit Note';
+    document.getElementById('debit-cancel-btn').style.display = 'inline-block';
+    document.getElementById('debit-form-title').innerText = 'Edit Debit Note';
+    document.getElementById('debit-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+function resetDebitForm() {
+    document.getElementById('debit-form').reset();
+    document.getElementById('debit-id').value = '';
+    const submitBtn = document.getElementById('debit-submit-btn');
+    if (submitBtn) { submitBtn.innerText = 'Save Debit Note'; submitBtn.disabled = false; submitBtn.style.background = ''; }
+    document.getElementById('debit-cancel-btn').style.display = 'none';
+    document.getElementById('debit-form-title').innerText = 'Issue Debit Note (Tool Misplacement / Fine)';
+    document.getElementById('debit-date').valueAsDate = new Date();
+    const now = new Date();
+    document.getElementById('debit-deduction-month').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+async function deleteDebitNote(id) {
+    if (!confirm("Delete this debit note entry?")) return;
+    await fetch(`${API_URL}/debit-notes/${id}`, { method: 'DELETE' });
+    loadDebitNoteTable();
+    loadDashboard();
+}
+
 // advance-form listener registered dynamically in _initSection('advance')
 
 // --- PAYROLL ---
@@ -2716,6 +2969,7 @@ async function loadPayroll() {
                 }
                 <div>Fare: <span style="color: var(--dark); font-weight: 500;">₹${p.fareTotal}</span></div>
                 <div>Advance: <span style="color: var(--danger); font-weight: 500;">-₹${p.advancePaid}</span></div>
+                ${(p.debitNotesDeducted && p.debitNotesDeducted > 0) ? `<div>Debit Note: <span style="color: #e11d48; font-weight: 500;">-₹${p.debitNotesDeducted}</span></div>` : ''}
                 ${p.previousBalance !== 0 ?
                 `<div style="grid-column: 1/-1; border-top: 1px dashed #e2e8f0; padding-top: 4px; margin-top: 4px;">
                         Previous Bal: <span style="color: ${p.previousBalance < 0 ? '#dc2626' : '#10b981'}; font-weight: 500;">
@@ -3396,6 +3650,34 @@ async function confirmDelete() {
 
 let previewImages = [];
 let currentPreviewIndex = 0;
+
+function showPreview(url, title, date, amount) {
+    if (!url) return;
+
+    if (url.toLowerCase().endsWith('.pdf')) {
+        window.open(url, '_blank');
+        return;
+    }
+
+    const overlay = document.getElementById('image-preview-overlay');
+    if (!overlay) {
+        window.open(url, '_blank');
+        return;
+    }
+
+    previewImages = [{
+        src: url,
+        type: title || 'Image Proof',
+        date: date || '',
+        amount: amount || ''
+    }];
+    currentPreviewIndex = 0;
+
+    updatePreviewImage();
+    overlay.classList.add('active');
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
 
 function openImagePreview(src, type, date, amount) {
     const overlay = document.getElementById('image-preview-overlay');

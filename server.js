@@ -33,7 +33,7 @@ app.get('/', (req, res) => res.redirect(302, '/login.html'));
 app.get('/index.html', (req, res) => res.redirect(302, '/login.html'));
 
 // Redirect legacy section URLs → new sections folder
-const legacyPages = ['/dashboard.html', '/employees.html', '/attendance.html', '/advance.html', '/payroll.html', '/uploads.html', '/settings.html', '/attPhotos.html'];
+const legacyPages = ['/dashboard.html', '/employees.html', '/attendance.html', '/advance.html', '/debitNotes.html', '/payroll.html', '/uploads.html', '/settings.html', '/attPhotos.html'];
 app.get(legacyPages, (req, res) => {
     const page = req.path.replace('.html', '');
     res.redirect(302, `/sections${page}.html`);
@@ -47,6 +47,7 @@ const attendancePhotosRoutes = require('./backend/routes/attendancePhotos');
 const holidayRoutes = require('./backend/routes/holidays');
 const settingsRoutes = require('./backend/routes/settings');
 const advanceRoutes = require('./backend/routes/advances');
+const debitNotesRoutes = require('./backend/routes/debitNotes');
 const paymentRoutes = require('./backend/routes/payments');
 const uploadRoutes = require('./backend/routes/uploads');
 const payrollRoutes = require('./backend/routes/payroll');
@@ -59,6 +60,7 @@ app.use('/api/attendance-photos', attendancePhotosRoutes);
 app.use('/api/holidays', holidayRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/advances', advanceRoutes);
+app.use('/api/debit-notes', debitNotesRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/payroll', payrollRoutes);

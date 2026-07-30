@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Advance Payments | Siddhi Electricals</title>
+    <title>Debit Notes | Siddhi Electricals</title>
     <link rel="stylesheet" href="../css/style.css">
     <link rel="icon" type="image/png" href="../assets/favicon.png">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,7 +15,7 @@
         })();
     </script>
 </head>
-<body data-page="advance">
+<body data-page="debitNotes">
 
     <div class="overlay" onclick="toggleSidebar()"></div>
 
@@ -34,7 +34,7 @@
             <li class="nav-item" data-section="employees"  onclick="location.href='/sections/employees.html'">👥 Employees</li>
             <li class="nav-item" data-section="attendance" onclick="location.href='/sections/attendance.html'">🕒 Attendance</li>
             <li class="nav-item" data-section="advance"    onclick="location.href='/sections/advance.html'">💲 Advance Payments</li>
-            <li class="nav-item" data-section="debitNotes" onclick="location.href='/sections/debitNotes.html'">📋 Debit Notes</li>
+            <li class="nav-item active" data-section="debitNotes" onclick="location.href='/sections/debitNotes.html'">📋 Debit Notes</li>
             <li class="nav-item" data-section="payroll"    onclick="location.href='/sections/payroll.html'">📄 Payroll</li>
             <li class="nav-item" data-section="uploads"    onclick="location.href='/sections/uploads.html'">📷 Uploads</li>
             <li class="nav-item" data-section="attPhotos"  onclick="location.href='/sections/attPhotos.html'">📸 Att. Photos</li>
@@ -53,73 +53,92 @@
             <button class="hamburger-btn" onclick="toggleSidebar()" style="display:none;background:none;border:none;font-size:1.5rem;cursor:pointer;padding:0.5rem;">☰</button>
         </header>
         <div id="sections-container">
-            <section id="advance" class="section active">
+            <section id="debitNotes" class="section active">
 
+                <!-- Summary Header / KPI Cards -->
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:1rem;margin-bottom:1.5rem;">
+                    <div style="background:linear-gradient(135deg, #fff1f2, #ffe4e6);border:1px solid #fecdd3;padding:1.2rem;border-radius:12px;box-shadow:0 2px 4px rgba(0,0,0,0.03);">
+                        <div style="font-size:0.85rem;font-weight:600;color:#be123c;">Total Debit Issued</div>
+                        <div style="font-size:1.75rem;font-weight:800;color:#e11d48;margin-top:0.25rem;" id="debit-stat-total">&#8377;0</div>
+                        <div style="font-size:0.75rem;color:#9f1239;margin-top:0.25rem;">All time misplaced tools / fines</div>
+                    </div>
+                    <div style="background:linear-gradient(135deg, #fff7ed, #ffedd5);border:1px solid #fed7aa;padding:1.2rem;border-radius:12px;box-shadow:0 2px 4px rgba(0,0,0,0.03);">
+                        <div style="font-size:0.85rem;font-weight:600;color:#c2410c;">This Month Deductions</div>
+                        <div style="font-size:1.75rem;font-weight:800;color:#ea580c;margin-top:0.25rem;" id="debit-stat-month">&#8377;0</div>
+                        <div style="font-size:0.75rem;color:#9a3412;margin-top:0.25rem;">Deducted from current payroll</div>
+                    </div>
+                    <div style="background:linear-gradient(135deg, #eff6ff, #dbeafe);border:1px solid #bfdbfe;padding:1.2rem;border-radius:12px;box-shadow:0 2px 4px rgba(0,0,0,0.03);">
+                        <div style="font-size:0.85rem;font-weight:600;color:#1d4ed8;">Total Notes Logged</div>
+                        <div style="font-size:1.75rem;font-weight:800;color:#2563eb;margin-top:0.25rem;" id="debit-stat-count">0</div>
+                        <div style="font-size:0.75rem;color:#1e40af;margin-top:0.25rem;">Recorded debit note entries</div>
+                    </div>
+                </div>
+
+                <!-- Record / Issue Form -->
                 <div class="card">
-                    <h3>Record Advance Payment</h3>
-                    <form id="advance-form">
-                        <input type="hidden" id="adv-id">
+                    <h3 id="debit-form-title">Issue Debit Note (Tool Misplacement / Fine)</h3>
+                    <form id="debit-form">
+                        <input type="hidden" id="debit-id">
                         <div class="form-group grid-2">
                             <div>
-                                <label>Employee</label>
-                                <select id="adv-employee" required><option value="">Select Employee</option></select>
+                                <label>Employee <span style="color:#ef4444;">*</span></label>
+                                <select id="debit-employee" required><option value="">Select Employee</option></select>
                             </div>
                             <div>
-                                <label>Amount (₹)</label>
-                                <input type="number" id="adv-amount" required>
+                                <label>Amount (₹) <span style="color:#ef4444;">*</span></label>
+                                <input type="number" id="debit-amount" placeholder="e.g. 1500" required min="1" step="any">
                             </div>
                         </div>
                         <div class="form-group grid-2">
                             <div>
-                                <label>Date</label>
-                                <input type="date" id="adv-date" required>
+                                <label>Issue Date <span style="color:#ef4444;">*</span></label>
+                                <input type="date" id="debit-date" required>
                             </div>
-                            <div style="background:#fff1f2;padding:10px;border-radius:6px;border:1px dashed #fecdd3;">
-                                <label style="color:#be123c;font-weight:bold;">Deduct from Salary of (Month)</label>
-                                <input type="month" id="adv-deduction-month" required style="border:2px solid #fecdd3;">
-                                <small style="display:block;margin-top:4px;color:var(--primary);font-weight:500;">Select the month you want this to be deducted from.</small>
-                            </div>
-                        </div>
-                        <div class="form-group grid-2">
-                            <div>
-                                <label>Payment Mode</label>
-                                <select id="adv-mode"><option value="Online" selected>Online/UPI</option><option value="Cash">Cash</option><option value="Check">Check</option></select>
-                            </div>
-                            <div>
-                                <label>Screenshot Proof <span style="color:#ef4444;">*</span></label>
-                                <input type="file" id="adv-screenshot" accept="image/*" required>
-                                <small style="color:#ef4444;display:block;">* Proof is required to save the advance.</small>
+                            <div style="background:#fff1f2;padding:10px;border-radius:8px;border:1px dashed #fecdd3;">
+                                <label style="color:#be123c;font-weight:bold;">Deduct from Salary of (Month) <span style="color:#ef4444;">*</span></label>
+                                <input type="month" id="debit-deduction-month" required style="border:2px solid #fecdd3;">
+                                <small style="display:block;margin-top:4px;color:var(--primary);font-weight:500;">Select the month salary this tool/fine will be deducted from.</small>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>Notes</label>
-                            <input type="text" id="adv-notes">
+                            <label>Reason / Tool Details <span style="color:#ef4444;">*</span></label>
+                            <input type="text" id="debit-reason" placeholder="e.g. Misplaced 12mm Drill Machine, Damaged Grinder, Lost Helmet" required>
                         </div>
                         <div class="form-actions" style="margin-top:1rem;">
-                            <button type="submit" class="btn btn-primary" id="adv-submit-btn">Save Payment</button>
-                            <button type="button" class="btn" id="adv-cancel-btn" style="display:none;background:var(--gray);color:white;" onclick="resetAdvanceForm()">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="debit-submit-btn">Save Debit Note</button>
+                            <button type="button" class="btn" id="debit-cancel-btn" style="display:none;background:var(--gray);color:white;" onclick="resetDebitForm()">Cancel</button>
                         </div>
                     </form>
                 </div>
 
+                <!-- History Table Card -->
                 <div class="card">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
-                        <h3>Advance History</h3>
+                        <h3>Debit Note History</h3>
                         <div class="filter-group" style="flex-wrap:wrap;">
                             <div class="filter-item">
-                                <label for="adv-filter-month" class="filter-label">Filter by Month:</label>
-                                <input type="month" id="adv-filter-month" onchange="loadAdvanceTable()" class="filter-input">
+                                <label for="debit-filter-month" class="filter-label">Filter Month:</label>
+                                <input type="month" id="debit-filter-month" onchange="loadDebitNoteTable()" class="filter-input">
                             </div>
                             <div class="filter-item">
-                                <label for="adv-filter-employee" class="filter-label">Employee:</label>
-                                <select id="adv-filter-employee" onchange="loadAdvanceTable()" class="filter-input"><option value="">All Employees</option></select>
+                                <label for="debit-filter-employee" class="filter-label">Employee:</label>
+                                <select id="debit-filter-employee" onchange="loadDebitNoteTable()" class="filter-input"><option value="">All Employees</option></select>
                             </div>
                         </div>
                     </div>
                     <div class="table-container">
                         <table>
-                            <thead><tr><th>Date</th><th>Employee</th><th>Amount</th><th>Deduct Month</th><th>Mode</th><th>Notes</th><th>Proof</th><th>Action</th></tr></thead>
-                            <tbody id="advance-table-body"></tbody>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Employee</th>
+                                    <th>Amount (₹)</th>
+                                    <th>Deduct Month</th>
+                                    <th>Reason / Item Details</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="debit-table-body"></tbody>
                         </table>
                     </div>
                 </div>
@@ -128,6 +147,7 @@
         </div>
     </main>
 
+    <!-- Lightbox Image Preview Modal -->
     <div id="image-preview-overlay" class="image-preview-overlay" onclick="closeImagePreview(event)">
         <div onclick="event.stopPropagation()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:0.75rem 1rem;flex-shrink:0;gap:0.5rem;">
             <span id="preview-counter" style="color:white;font-size:0.9rem;font-weight:600;">1/1</span>
