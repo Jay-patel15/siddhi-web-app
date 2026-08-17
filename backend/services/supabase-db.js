@@ -140,33 +140,35 @@ const deleteEmployee = async (id) => {
     });
 };
 
-// ==================== ATTENDANCE ====================
+const fetchAllFromTable = async (tableName, selectStr = '*') => {
+    return retry(async () => {
+        const { data: firstPage, error, count } = await supabase
+            .from(tableName)
+            .select(selectStr, { count: 'exact' })
+            .range(0, 999);
+
+        if (error) throw new Error(error.message);
+        if (!firstPage || firstPage.length === 0) return [];
+        if (!count || count <= 1000) return firstPage;
+
+        const pagePromises = [];
+        for (let from = 1000; from < count; from += 1000) {
+            const to = from + 999;
+            pagePromises.push(
+                supabase.from(tableName).select(selectStr).range(from, to).then(res => {
+                    if (res.error) throw new Error(res.error.message);
+                    return res.data || [];
+                })
+            );
+        }
+        const remainingPages = await Promise.all(pagePromises);
+        return firstPage.concat(...remainingPages.flat());
+    });
+};
 
 const getAllAttendance = async () => {
     return getCached('attendance_all', async () => {
-        return retry(async () => {
-            let allData = [];
-            let from = 0;
-            let to = 999;
-            let hasMore = true;
-
-            while (hasMore) {
-                const { data, error } = await supabase.from('attendance').select('*').range(from, to);
-                if (error) throw new Error(error.message);
-                if (data && data.length > 0) {
-                    allData = allData.concat(data);
-                    if (data.length < 1000) {
-                        hasMore = false;
-                    } else {
-                        from += 1000;
-                        to += 1000;
-                    }
-                } else {
-                    hasMore = false;
-                }
-            }
-            return allData;
-        });
+        return fetchAllFromTable('attendance');
     });
 };
 
@@ -223,29 +225,7 @@ const deleteAttendance = async (id) => {
 
 const getAllAdvances = async () => {
     return getCached('advances_all', async () => {
-        return retry(async () => {
-            let allData = [];
-            let from = 0;
-            let to = 999;
-            let hasMore = true;
-
-            while (hasMore) {
-                const { data, error } = await supabase.from('advances').select('*').range(from, to);
-                if (error) throw new Error(error.message);
-                if (data && data.length > 0) {
-                    allData = allData.concat(data);
-                    if (data.length < 1000) {
-                        hasMore = false;
-                    } else {
-                        from += 1000;
-                        to += 1000;
-                    }
-                } else {
-                    hasMore = false;
-                }
-            }
-            return allData;
-        });
+        return fetchAllFromTable('advances');
     });
 };
 
@@ -288,33 +268,12 @@ const deleteAdvance = async (id) => {
 
 const getAllDebitNotes = async () => {
     return getCached('debit_notes_all', async () => {
-        return retry(async () => {
-            let allData = [];
-            let from = 0;
-            let to = 999;
-            let hasMore = true;
-
-            while (hasMore) {
-                const { data, error } = await supabase.from('debit_notes').select('*').range(from, to);
-                if (error) throw new Error(error.message);
-                if (data && data.length > 0) {
-                    data.forEach(d => {
-                        if (!d.employeeId && d.empId) d.employeeId = d.empId;
-                        if (!d.empId && d.employeeId) d.empId = d.employeeId;
-                    });
-                    allData = allData.concat(data);
-                    if (data.length < 1000) {
-                        hasMore = false;
-                    } else {
-                        from += 1000;
-                        to += 1000;
-                    }
-                } else {
-                    hasMore = false;
-                }
-            }
-            return allData;
+        const data = await fetchAllFromTable('debit_notes');
+        data.forEach(d => {
+            if (!d.employeeId && d.empId) d.employeeId = d.empId;
+            if (!d.empId && d.employeeId) d.empId = d.employeeId;
         });
+        return data;
     });
 };
 
@@ -415,29 +374,7 @@ const deleteDebitNote = async (id) => {
 
 const getAllPayments = async () => {
     return getCached('payments_all', async () => {
-        return retry(async () => {
-            let allData = [];
-            let from = 0;
-            let to = 999;
-            let hasMore = true;
-
-            while (hasMore) {
-                const { data, error } = await supabase.from('payments').select('*').range(from, to);
-                if (error) throw new Error(error.message);
-                if (data && data.length > 0) {
-                    allData = allData.concat(data);
-                    if (data.length < 1000) {
-                        hasMore = false;
-                    } else {
-                        from += 1000;
-                        to += 1000;
-                    }
-                } else {
-                    hasMore = false;
-                }
-            }
-            return allData;
-        });
+        return fetchAllFromTable('payments');
     });
 };
 

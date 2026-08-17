@@ -950,15 +950,15 @@ async function importExcelData() {
 
 // --- DASHBOARD ---
 async function loadDashboard() {
-    // 1. Fetch all data
-    await fetchHolidays();
+    // 1. Fetch all data in parallel
     try {
         const [empRes, attRes, advRes, debRes, payRes] = await Promise.all([
             fetch(`${API_URL}/employees`),
             fetch(`${API_URL}/attendance`),
             fetch(`${API_URL}/advances`),
             fetch(`${API_URL}/debit-notes`),
-            fetch(`${API_URL}/payments`)
+            fetch(`${API_URL}/payments`),
+            fetchHolidays()
         ]);
 
         if (!empRes.ok || !attRes.ok || !advRes.ok || !debRes.ok || !payRes.ok) {
@@ -1001,8 +1001,6 @@ async function loadDashboard() {
     const todaysAtt = attendanceData.filter(a => a.date === today).length;
     document.getElementById('dash-today-att').innerText = todaysAtt;
 
-
-
     // Filter Logic
     let filterMonth = document.getElementById('dashboard-month-filter').value;
     if (!filterMonth) {
@@ -1017,19 +1015,44 @@ async function loadDashboard() {
     // Quick client-side payroll calc for dashboard stat (Filtered by Month)
     let totalPayroll = 0;
 
-    // OPTIMIZATION: Group attendance by employee for the current month once (O(M))
+    // OPTIMIZATION: Pre-group datasets by employee for O(1) constant-time lookups
     const monthlyAttByEmp = new Map();
+    const pastAttByEmp = new Map();
     attendanceData.forEach(a => {
-        if (a.date.startsWith(currentMonth)) {
-            const empKey = String(a.employeeId);
-            if (!monthlyAttByEmp.has(empKey)) {
-                monthlyAttByEmp.set(empKey, []);
-            }
+        const empKey = String(a.employeeId);
+        if (a.date && a.date.startsWith(currentMonth)) {
+            if (!monthlyAttByEmp.has(empKey)) monthlyAttByEmp.set(empKey, []);
             monthlyAttByEmp.get(empKey).push(a);
+        } else if (a.date && a.date < `${currentMonth}-01`) {
+            if (!pastAttByEmp.has(empKey)) pastAttByEmp.set(empKey, []);
+            pastAttByEmp.get(empKey).push(a);
         }
     });
 
+    const advancesByEmp = new Map();
+    advancesData.forEach(a => {
+        const empKey = String(a.employeeId);
+        if (!advancesByEmp.has(empKey)) advancesByEmp.set(empKey, []);
+        advancesByEmp.get(empKey).push(a);
+    });
+
+    const debitNotesByEmp = new Map();
+    debitNotesData.forEach(d => {
+        const empKey = String(d.employeeId || d.empId);
+        if (!debitNotesByEmp.has(empKey)) debitNotesByEmp.set(empKey, []);
+        debitNotesByEmp.get(empKey).push(d);
+    });
+
+    const paymentsByEmp = new Map();
+    paymentsData.forEach(p => {
+        const empKey = String(p.employeeId);
+        if (!paymentsByEmp.has(empKey)) paymentsByEmp.set(empKey, []);
+        paymentsByEmp.get(empKey).push(p);
+    });
+
     employeesData.forEach(emp => {
+        const empIdStr = String(emp.id);
+
         if (emp.employee_type === 'fixed_salary') {
             // Fixed salary employees earn their monthly salary + fare regardless of attendance
             const fixedEarned = (parseFloat(emp.salary) || 0) + (parseFloat(emp.monthly_fare) || 0);
@@ -1037,8 +1060,8 @@ async function loadDashboard() {
             return;
         }
 
-        // O(1) lookup instead of O(M) filter
-        const empAtt = monthlyAttByEmp.get(String(emp.id)) || [];
+        // O(1) lookup
+        const empAtt = monthlyAttByEmp.get(empIdStr) || [];
         let empEarned = 0;
         empAtt.forEach(att => {
             const wh = parseFloat(att.workedHours);
@@ -1060,7 +1083,7 @@ async function loadDashboard() {
     });
 
     const totalAdvances = advancesData.filter(a => {
-        const dedMonth = a.deductionMonth || a.date.substring(0, 7);
+        const dedMonth = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
         return dedMonth === currentMonth;
     }).reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
 
@@ -1073,36 +1096,33 @@ async function loadDashboard() {
         return p.salaryMonth === currentMonth;
     }).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
-    // Calculate sum of all employees' previous carry-forward balances
-    // Same logic as backend payroll.js — past earnings - past deductions - past payments
+    // Calculate sum of all employees' previous carry-forward balances using O(1) pre-indexed Maps
     let totalPreviousBalance = 0;
     employeesData.forEach(emp => {
-        const pastAdv = advancesData.filter(a => {
-            if (String(a.employeeId) !== String(emp.id)) return false;
+        const empIdStr = String(emp.id);
+        const empAdv = advancesByEmp.get(empIdStr) || [];
+        const empDeb = debitNotesByEmp.get(empIdStr) || [];
+        const empPay = paymentsByEmp.get(empIdStr) || [];
+        const empPastAtt = pastAttByEmp.get(empIdStr) || [];
+
+        const pastAdv = empAdv.filter(a => {
             const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
             return deduct < currentMonth;
         });
         const pastDeductions = pastAdv.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
 
-        const pastDeb = debitNotesData.filter(d => {
-            if (String(d.employeeId) !== String(emp.id)) return false;
+        const pastDeb = empDeb.filter(d => {
             const deduct = d.deductionMonth || (d.date ? d.date.substring(0, 7) : '');
             return deduct < currentMonth;
         });
         const pastDebDeductions = pastDeb.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
 
-        const pastPay = paymentsData.filter(p =>
-            String(p.employeeId) === String(emp.id) && p.salaryMonth < currentMonth
-        );
+        const pastPay = empPay.filter(p => p.salaryMonth < currentMonth);
         const pastPaymentsTotal = pastPay.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
         if (emp.employee_type === 'fixed_salary') {
-            // Fixed salary: count past months active (from payment history, advances or debit notes)
-            const pastPayMonths = new Set(
-                paymentsData
-                    .filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth < currentMonth)
-                    .map(p => p.salaryMonth)
-            );
+            // Fixed salary: count past months active
+            const pastPayMonths = new Set(pastPay.map(p => p.salaryMonth));
             pastAdv.forEach(a => {
                 const deduct = a.deductionMonth || (a.date ? a.date.substring(0, 7) : '');
                 pastPayMonths.add(deduct);
@@ -1119,11 +1139,8 @@ async function loadDashboard() {
             return;
         }
 
-        const pastAtt = attendanceData.filter(a =>
-            String(a.employeeId) === String(emp.id) && a.date < `${currentMonth}-01`
-        );
         let pastEarnings = 0;
-        pastAtt.forEach(att => {
+        empPastAtt.forEach(att => {
             const wh = parseFloat(att.workedHours);
             if (isNaN(wh)) return;
             const sal = parseFloat(emp.salary);
@@ -2297,8 +2314,11 @@ async function markAttendance() {
 
 // Wrapper to load everything needed for the Attendance Section
 async function loadAttendance() {
-    // Populate dropdown
-    await loadAttendanceForm();
+    // Populate dropdown and table concurrently in parallel
+    await Promise.all([
+        loadAttendanceForm(),
+        loadAttendanceTable()
+    ]);
 
     // Set Date Picker to today if empty
     if (!document.getElementById('att-date').value) {
@@ -2306,15 +2326,12 @@ async function loadAttendance() {
     }
 
     // Set default times for faster entry
-    if (!document.getElementById('att-time-in').value) {
+    if (document.getElementById('att-time-in') && !document.getElementById('att-time-in').value) {
         document.getElementById('att-time-in').value = '09:00';
     }
-    if (!document.getElementById('att-time-out').value) {
+    if (document.getElementById('att-time-out') && !document.getElementById('att-time-out').value) {
         document.getElementById('att-time-out').value = '18:00';
     }
-
-    // Load Table
-    loadAttendanceTable();
 }
 
 function att_filter_date_changed() {
@@ -2585,40 +2602,6 @@ function calculatePreview() {
 
 // --- ADVANCES ---
 async function loadAdvanceForm() {
-    const res = await fetch(`${API_URL}/employees`);
-    const employees = await res.json();
-
-    const select = document.getElementById('adv-employee');
-    const filterSelect = document.getElementById('adv-filter-employee');
-    const currentVal = select.value;
-    const currentFilterVal = filterSelect ? filterSelect.value : '';
-
-    select.innerHTML = '<option value="">Select Employee</option>';
-    if (filterSelect) {
-        filterSelect.innerHTML = '<option value="">All Employees</option>';
-    }
-
-    employees.sort((a, b) => a.name.localeCompare(b.name));
-
-    employees.forEach(emp => {
-        const isSupervisor = emp.employee_type === 'fixed_salary';
-        const salaryLabel = isSupervisor ? `₹${emp.salary}/mo` : `₹${emp.salary}/day`;
-        const opt = document.createElement('option');
-        opt.value = emp.id;
-        opt.textContent = `${emp.name} (${salaryLabel})`;
-        select.appendChild(opt);
-
-        if (filterSelect) {
-            const fOpt = document.createElement('option');
-            fOpt.value = emp.id;
-            fOpt.innerText = `${emp.name} (${salaryLabel})`;
-            filterSelect.appendChild(fOpt);
-        }
-    });
-
-    if (currentVal) select.value = currentVal;
-    if (filterSelect && currentFilterVal) filterSelect.value = currentFilterVal;
-
     // Defaults
     if (!document.getElementById('adv-date').value) {
         document.getElementById('adv-date').valueAsDate = new Date();
@@ -2629,7 +2612,48 @@ async function loadAdvanceForm() {
         document.getElementById('adv-deduction-month').value = currentMonth;
     }
 
-    loadAdvanceTable();
+    const populateDropdowns = async () => {
+        const res = await fetch(`${API_URL}/employees`);
+        const employees = await res.json();
+
+        const select = document.getElementById('adv-employee');
+        const filterSelect = document.getElementById('adv-filter-employee');
+        if (!select) return;
+
+        const currentVal = select.value;
+        const currentFilterVal = filterSelect ? filterSelect.value : '';
+
+        select.innerHTML = '<option value="">Select Employee</option>';
+        if (filterSelect) {
+            filterSelect.innerHTML = '<option value="">All Employees</option>';
+        }
+
+        employees.sort((a, b) => a.name.localeCompare(b.name));
+
+        employees.forEach(emp => {
+            const isSupervisor = emp.employee_type === 'fixed_salary';
+            const salaryLabel = isSupervisor ? `₹${emp.salary}/mo` : `₹${emp.salary}/day`;
+            const opt = document.createElement('option');
+            opt.value = emp.id;
+            opt.textContent = `${emp.name} (${salaryLabel})`;
+            select.appendChild(opt);
+
+            if (filterSelect) {
+                const fOpt = document.createElement('option');
+                fOpt.value = emp.id;
+                fOpt.innerText = `${emp.name} (${salaryLabel})`;
+                filterSelect.appendChild(fOpt);
+            }
+        });
+
+        if (currentVal) select.value = currentVal;
+        if (filterSelect && currentFilterVal) filterSelect.value = currentFilterVal;
+    };
+
+    await Promise.all([
+        populateDropdowns(),
+        loadAdvanceTable()
+    ]);
 }
 
 async function loadAdvanceTable() {
@@ -2727,40 +2751,6 @@ async function deleteAdvance(id) {
 
 // --- DEBIT NOTES ---
 async function loadDebitNoteForm() {
-    const res = await fetch(`${API_URL}/employees`);
-    const employees = await res.json();
-
-    const select = document.getElementById('debit-employee');
-    const filterSelect = document.getElementById('debit-filter-employee');
-    const currentVal = select.value;
-    const currentFilterVal = filterSelect ? filterSelect.value : '';
-
-    select.innerHTML = '<option value="">Select Employee</option>';
-    if (filterSelect) {
-        filterSelect.innerHTML = '<option value="">All Employees</option>';
-    }
-
-    employees.sort((a, b) => a.name.localeCompare(b.name));
-
-    employees.forEach(emp => {
-        const isSupervisor = emp.employee_type === 'fixed_salary';
-        const salaryLabel = isSupervisor ? `₹${emp.salary}/mo` : `₹${emp.salary}/day`;
-        const opt = document.createElement('option');
-        opt.value = emp.id;
-        opt.textContent = `${emp.name} (${salaryLabel})`;
-        select.appendChild(opt);
-
-        if (filterSelect) {
-            const fOpt = document.createElement('option');
-            fOpt.value = emp.id;
-            fOpt.innerText = `${emp.name} (${salaryLabel})`;
-            filterSelect.appendChild(fOpt);
-        }
-    });
-
-    if (currentVal) select.value = currentVal;
-    if (filterSelect && currentFilterVal) filterSelect.value = currentFilterVal;
-
     // Defaults
     if (!document.getElementById('debit-date').value) {
         document.getElementById('debit-date').valueAsDate = new Date();
@@ -2771,7 +2761,48 @@ async function loadDebitNoteForm() {
         document.getElementById('debit-deduction-month').value = currentMonth;
     }
 
-    loadDebitNoteTable();
+    const populateDropdowns = async () => {
+        const res = await fetch(`${API_URL}/employees`);
+        const employees = await res.json();
+
+        const select = document.getElementById('debit-employee');
+        const filterSelect = document.getElementById('debit-filter-employee');
+        if (!select) return;
+
+        const currentVal = select.value;
+        const currentFilterVal = filterSelect ? filterSelect.value : '';
+
+        select.innerHTML = '<option value="">Select Employee</option>';
+        if (filterSelect) {
+            filterSelect.innerHTML = '<option value="">All Employees</option>';
+        }
+
+        employees.sort((a, b) => a.name.localeCompare(b.name));
+
+        employees.forEach(emp => {
+            const isSupervisor = emp.employee_type === 'fixed_salary';
+            const salaryLabel = isSupervisor ? `₹${emp.salary}/mo` : `₹${emp.salary}/day`;
+            const opt = document.createElement('option');
+            opt.value = emp.id;
+            opt.textContent = `${emp.name} (${salaryLabel})`;
+            select.appendChild(opt);
+
+            if (filterSelect) {
+                const fOpt = document.createElement('option');
+                fOpt.value = emp.id;
+                fOpt.innerText = `${emp.name} (${salaryLabel})`;
+                filterSelect.appendChild(fOpt);
+            }
+        });
+
+        if (currentVal) select.value = currentVal;
+        if (filterSelect && currentFilterVal) filterSelect.value = currentFilterVal;
+    };
+
+    await Promise.all([
+        populateDropdowns(),
+        loadDebitNoteTable()
+    ]);
 }
 
 async function loadDebitNoteTable() {
