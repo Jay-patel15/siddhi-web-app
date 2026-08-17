@@ -61,13 +61,41 @@ const retry = async (operation, maxRetries = 5, delay = 800) => {
     throw lastError;
 };
 
+// ==================== IN-MEMORY CACHE ====================
+const dbCache = new Map();
+const CACHE_TTL_MS = 25000; // 25 seconds cache TTL
+
+const getCached = async (key, fetchFn) => {
+    const cached = dbCache.get(key);
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+        return cached.data;
+    }
+    const data = await fetchFn();
+    dbCache.set(key, { data, timestamp: Date.now() });
+    return data;
+};
+
+const invalidateCache = (prefix) => {
+    if (!prefix) {
+        dbCache.clear();
+        return;
+    }
+    for (const key of dbCache.keys()) {
+        if (key.startsWith(prefix)) {
+            dbCache.delete(key);
+        }
+    }
+};
+
 // ==================== EMPLOYEES ====================
 
 const getAllEmployees = async () => {
-    return retry(async () => {
-        const { data, error } = await supabase.from('employees').select('*');
-        if (error) throw new Error(error.message);
-        return data || [];
+    return getCached('employees_all', async () => {
+        return retry(async () => {
+            const { data, error } = await supabase.from('employees').select('*');
+            if (error) throw new Error(error.message);
+            return data || [];
+        });
     });
 };
 
@@ -80,10 +108,10 @@ const getEmployeeById = async (id) => {
 };
 
 const createEmployee = async (employee) => {
-    // Retry once on transient pooler errors. maxRetries=2 keeps duplicate risk low.
     return retry(async () => {
         const { data, error } = await supabase.from('employees').insert([employee]).select().single();
         if (error) throw new Error(error.message);
+        invalidateCache('employees');
         return data;
     }, 2, 800);
 };
@@ -92,32 +120,22 @@ const updateEmployee = async (id, employee) => {
     return retry(async () => {
         const { data, error } = await supabase.from('employees').update(employee).eq('id', id).select().single();
         if (error) throw new Error(error.message);
+        invalidateCache('employees');
         return data;
     });
 };
 
 const deleteEmployee = async (id) => {
     return retry(async () => {
-        // 1. Delete associated Attendance
         await supabase.from('attendance').delete().eq('employeeId', id);
-
-        // 2. Delete associated Advances
         await supabase.from('advances').delete().eq('employeeId', id);
-
-        // Delete associated Debit Notes
         await supabase.from('debit_notes').delete().eq('employeeId', id);
-
-        // 3. Delete associated Payments
         await supabase.from('payments').delete().eq('employeeId', id);
-
-        // 4. Delete associated Uploads (metadata out of DB)
-        // (Note: To keep this safe/simple without tracking raw bucket file tokens in a single transaction, 
-        // we just drop the DB metadata. Or we can leave orphan images. The request is DB wipe.)
         await supabase.from('uploads').delete().eq('employeeId', id);
 
-        // 5. Finally, Delete the Employee record itself
         const { error } = await supabase.from('employees').delete().eq('id', id);
         if (error) throw new Error(error.message);
+        invalidateCache();
         return { success: true };
     });
 };
@@ -125,28 +143,30 @@ const deleteEmployee = async (id) => {
 // ==================== ATTENDANCE ====================
 
 const getAllAttendance = async () => {
-    return retry(async () => {
-        let allData = [];
-        let from = 0;
-        let to = 999;
-        let hasMore = true;
+    return getCached('attendance_all', async () => {
+        return retry(async () => {
+            let allData = [];
+            let from = 0;
+            let to = 999;
+            let hasMore = true;
 
-        while (hasMore) {
-            const { data, error } = await supabase.from('attendance').select('*').range(from, to);
-            if (error) throw new Error(error.message);
-            if (data && data.length > 0) {
-                allData = allData.concat(data);
-                if (data.length < 1000) {
-                    hasMore = false;
+            while (hasMore) {
+                const { data, error } = await supabase.from('attendance').select('*').range(from, to);
+                if (error) throw new Error(error.message);
+                if (data && data.length > 0) {
+                    allData = allData.concat(data);
+                    if (data.length < 1000) {
+                        hasMore = false;
+                    } else {
+                        from += 1000;
+                        to += 1000;
+                    }
                 } else {
-                    from += 1000;
-                    to += 1000;
+                    hasMore = false;
                 }
-            } else {
-                hasMore = false;
             }
-        }
-        return allData;
+            return allData;
+        });
     });
 };
 
@@ -176,16 +196,16 @@ const createAttendance = async (attendance) => {
     return retry(async () => {
         const { data, error } = await supabase.from('attendance').insert([attendance]).select().single();
         if (error) throw new Error(error.message);
+        invalidateCache('attendance');
         return data;
     }, 2, 800);
 };
 
 const updateAttendance = async (id, attendance) => {
-    // Use higher base delay (1200ms) to give PgBouncer/schema_migrations time to recover.
-    // Checkout operations are the most user-visible, so we retry more patiently.
     return retry(async () => {
         const { data, error } = await supabase.from('attendance').update(attendance).eq('id', id).select().single();
         if (error) throw new Error(error.message);
+        invalidateCache('attendance');
         return data;
     }, 5, 1200);
 };
@@ -194,6 +214,7 @@ const deleteAttendance = async (id) => {
     return retry(async () => {
         const { error } = await supabase.from('attendance').delete().eq('id', id);
         if (error) throw new Error(error.message);
+        invalidateCache('attendance');
         return { success: true };
     });
 };
@@ -201,28 +222,30 @@ const deleteAttendance = async (id) => {
 // ==================== ADVANCES ====================
 
 const getAllAdvances = async () => {
-    return retry(async () => {
-        let allData = [];
-        let from = 0;
-        let to = 999;
-        let hasMore = true;
+    return getCached('advances_all', async () => {
+        return retry(async () => {
+            let allData = [];
+            let from = 0;
+            let to = 999;
+            let hasMore = true;
 
-        while (hasMore) {
-            const { data, error } = await supabase.from('advances').select('*').range(from, to);
-            if (error) throw new Error(error.message);
-            if (data && data.length > 0) {
-                allData = allData.concat(data);
-                if (data.length < 1000) {
-                    hasMore = false;
+            while (hasMore) {
+                const { data, error } = await supabase.from('advances').select('*').range(from, to);
+                if (error) throw new Error(error.message);
+                if (data && data.length > 0) {
+                    allData = allData.concat(data);
+                    if (data.length < 1000) {
+                        hasMore = false;
+                    } else {
+                        from += 1000;
+                        to += 1000;
+                    }
                 } else {
-                    from += 1000;
-                    to += 1000;
+                    hasMore = false;
                 }
-            } else {
-                hasMore = false;
             }
-        }
-        return allData;
+            return allData;
+        });
     });
 };
 
@@ -238,6 +261,7 @@ const createAdvance = async (advance) => {
     return retry(async () => {
         const { data, error } = await supabase.from('advances').insert([advance]).select().single();
         if (error) throw new Error(error.message);
+        invalidateCache('advances');
         return data;
     }, 2, 800);
 };
@@ -246,6 +270,7 @@ const updateAdvance = async (id, advance) => {
     return retry(async () => {
         const { data, error } = await supabase.from('advances').update(advance).eq('id', id).select().single();
         if (error) throw new Error(error.message);
+        invalidateCache('advances');
         return data;
     });
 };
@@ -254,6 +279,7 @@ const deleteAdvance = async (id) => {
     return retry(async () => {
         const { error } = await supabase.from('advances').delete().eq('id', id);
         if (error) throw new Error(error.message);
+        invalidateCache('advances');
         return { success: true };
     });
 };
@@ -261,33 +287,34 @@ const deleteAdvance = async (id) => {
 // ==================== DEBIT NOTES ====================
 
 const getAllDebitNotes = async () => {
-    return retry(async () => {
-        let allData = [];
-        let from = 0;
-        let to = 999;
-        let hasMore = true;
+    return getCached('debit_notes_all', async () => {
+        return retry(async () => {
+            let allData = [];
+            let from = 0;
+            let to = 999;
+            let hasMore = true;
 
-        while (hasMore) {
-            const { data, error } = await supabase.from('debit_notes').select('*').range(from, to);
-            if (error) throw new Error(error.message);
-            if (data && data.length > 0) {
-                // Ensure employeeId property is populated regardless of DB column name
-                data.forEach(d => {
-                    if (!d.employeeId && d.empId) d.employeeId = d.empId;
-                    if (!d.empId && d.employeeId) d.empId = d.employeeId;
-                });
-                allData = allData.concat(data);
-                if (data.length < 1000) {
-                    hasMore = false;
+            while (hasMore) {
+                const { data, error } = await supabase.from('debit_notes').select('*').range(from, to);
+                if (error) throw new Error(error.message);
+                if (data && data.length > 0) {
+                    data.forEach(d => {
+                        if (!d.employeeId && d.empId) d.employeeId = d.empId;
+                        if (!d.empId && d.employeeId) d.empId = d.employeeId;
+                    });
+                    allData = allData.concat(data);
+                    if (data.length < 1000) {
+                        hasMore = false;
+                    } else {
+                        from += 1000;
+                        to += 1000;
+                    }
                 } else {
-                    from += 1000;
-                    to += 1000;
+                    hasMore = false;
                 }
-            } else {
-                hasMore = false;
             }
-        }
-        return allData;
+            return allData;
+        });
     });
 };
 
@@ -297,7 +324,7 @@ const getDebitNoteById = async (id) => {
         if (error) throw new Error(error.message);
         if (data) {
             if (!data.employeeId && data.empId) data.employeeId = data.empId;
-            if (!data.empId && data.employeeId) data.empId = data.employeeId;
+            if (!data.empId && d.employeeId) data.empId = data.employeeId;
         }
         return data;
     });
@@ -313,24 +340,25 @@ const createDebitNote = async (debitNote) => {
         try {
             const { data, error } = await supabase.from('debit_notes').insert([payload]).select().single();
             if (error) throw error;
+            invalidateCache('debit_notes');
             return data;
         } catch (err) {
             const errMsg = err.message || '';
             if (errMsg.includes('employeeId')) {
-                // DB table has 'empId' column instead of 'employeeId'
                 const fallbackPayload = { ...payload };
                 delete fallbackPayload.employeeId;
                 const { data, error } = await supabase.from('debit_notes').insert([fallbackPayload]).select().single();
                 if (error) throw new Error(error.message);
                 if (data) data.employeeId = data.empId;
+                invalidateCache('debit_notes');
                 return data;
             } else if (errMsg.includes('empId')) {
-                // DB table has 'employeeId' column instead of 'empId'
                 const fallbackPayload = { ...payload };
                 delete fallbackPayload.empId;
                 const { data, error } = await supabase.from('debit_notes').insert([fallbackPayload]).select().single();
                 if (error) throw new Error(error.message);
                 if (data) data.empId = data.employeeId;
+                invalidateCache('debit_notes');
                 return data;
             }
             throw new Error(errMsg);
@@ -348,6 +376,7 @@ const updateDebitNote = async (id, debitNote) => {
         try {
             const { data, error } = await supabase.from('debit_notes').update(payload).eq('id', id).select().single();
             if (error) throw error;
+            invalidateCache('debit_notes');
             return data;
         } catch (err) {
             const errMsg = err.message || '';
@@ -357,6 +386,7 @@ const updateDebitNote = async (id, debitNote) => {
                 const { data, error } = await supabase.from('debit_notes').update(fallbackPayload).eq('id', id).select().single();
                 if (error) throw new Error(error.message);
                 if (data) data.employeeId = data.empId;
+                invalidateCache('debit_notes');
                 return data;
             } else if (errMsg.includes('empId')) {
                 const fallbackPayload = { ...payload };
@@ -364,6 +394,7 @@ const updateDebitNote = async (id, debitNote) => {
                 const { data, error } = await supabase.from('debit_notes').update(fallbackPayload).eq('id', id).select().single();
                 if (error) throw new Error(error.message);
                 if (data) data.empId = data.employeeId;
+                invalidateCache('debit_notes');
                 return data;
             }
             throw new Error(errMsg);
@@ -375,6 +406,7 @@ const deleteDebitNote = async (id) => {
     return retry(async () => {
         const { error } = await supabase.from('debit_notes').delete().eq('id', id);
         if (error) throw new Error(error.message);
+        invalidateCache('debit_notes');
         return { success: true };
     });
 };
@@ -382,28 +414,30 @@ const deleteDebitNote = async (id) => {
 // ==================== PAYMENTS ====================
 
 const getAllPayments = async () => {
-    return retry(async () => {
-        let allData = [];
-        let from = 0;
-        let to = 999;
-        let hasMore = true;
+    return getCached('payments_all', async () => {
+        return retry(async () => {
+            let allData = [];
+            let from = 0;
+            let to = 999;
+            let hasMore = true;
 
-        while (hasMore) {
-            const { data, error } = await supabase.from('payments').select('*').range(from, to);
-            if (error) throw new Error(error.message);
-            if (data && data.length > 0) {
-                allData = allData.concat(data);
-                if (data.length < 1000) {
-                    hasMore = false;
+            while (hasMore) {
+                const { data, error } = await supabase.from('payments').select('*').range(from, to);
+                if (error) throw new Error(error.message);
+                if (data && data.length > 0) {
+                    allData = allData.concat(data);
+                    if (data.length < 1000) {
+                        hasMore = false;
+                    } else {
+                        from += 1000;
+                        to += 1000;
+                    }
                 } else {
-                    from += 1000;
-                    to += 1000;
+                    hasMore = false;
                 }
-            } else {
-                hasMore = false;
             }
-        }
-        return allData;
+            return allData;
+        });
     });
 };
 
@@ -419,6 +453,7 @@ const createPayment = async (payment) => {
     return retry(async () => {
         const { data, error } = await supabase.from('payments').insert([payment]).select().single();
         if (error) throw new Error(error.message);
+        invalidateCache('payments');
         return data;
     }, 2, 800);
 };
@@ -427,6 +462,7 @@ const updatePayment = async (id, payment) => {
     return retry(async () => {
         const { data, error } = await supabase.from('payments').update(payment).eq('id', id).select().single();
         if (error) throw new Error(error.message);
+        invalidateCache('payments');
         return data;
     });
 };
@@ -435,6 +471,7 @@ const deletePayment = async (id) => {
     return retry(async () => {
         const { error } = await supabase.from('payments').delete().eq('id', id);
         if (error) throw new Error(error.message);
+        invalidateCache('payments');
         return { success: true };
     });
 };
@@ -442,27 +479,29 @@ const deletePayment = async (id) => {
 // ==================== SETTINGS ====================
 
 const getSettings = async () => {
-    return retry(async () => {
-        let { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
-        if (error || !data) {
-            const defaultSet = { id: 1, standardHours: 8.5, slabHours: 6, maintenanceMode: false };
-            try {
-                const { data: upsertData } = await supabase.from('settings').upsert([defaultSet]).select().single();
-                data = upsertData || defaultSet;
-            } catch (e) {
-                data = defaultSet;
+    return getCached('settings_all', async () => {
+        return retry(async () => {
+            let { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
+            if (error || !data) {
+                const defaultSet = { id: 1, standardHours: 8.5, slabHours: 6, maintenanceMode: false };
+                try {
+                    const { data: upsertData } = await supabase.from('settings').upsert([defaultSet]).select().single();
+                    data = upsertData || defaultSet;
+                } catch (e) {
+                    data = defaultSet;
+                }
             }
-        }
 
-        const isMaintenance = Boolean(data.maintenanceMode !== undefined ? data.maintenanceMode : data.maintenance_mode);
+            const isMaintenance = Boolean(data.maintenanceMode !== undefined ? data.maintenanceMode : data.maintenance_mode);
 
-        return {
-            id: 1,
-            standardHours: parseFloat(data.standardHours || 8.5),
-            slabHours: parseFloat(data.slabHours || 6),
-            maintenanceMode: isMaintenance,
-            maintenance_mode: isMaintenance
-        };
+            return {
+                id: 1,
+                standardHours: parseFloat(data.standardHours || 8.5),
+                slabHours: parseFloat(data.slabHours || 6),
+                maintenanceMode: isMaintenance,
+                maintenance_mode: isMaintenance
+            };
+        });
     });
 };
 
@@ -480,8 +519,10 @@ const updateSettings = async (settings) => {
         if (error) {
             const { data: upsertData, error: upsertErr } = await supabase.from('settings').upsert([{ id: 1, ...payload }]).select().single();
             if (upsertErr) throw new Error(upsertErr.message);
+            invalidateCache('settings');
             return { ...(upsertData || payload), maintenanceMode: isMaintenance, maintenance_mode: isMaintenance };
         }
+        invalidateCache('settings');
         return { ...(data || payload), maintenanceMode: isMaintenance, maintenance_mode: isMaintenance };
     });
 };
@@ -489,49 +530,42 @@ const updateSettings = async (settings) => {
 // ==================== HOLIDAYS ====================
 
 const getAllHolidays = async () => {
-    return retry(async () => {
-        const { data, error } = await supabase.from('holidays').select('date');
-        if (error) throw new Error(error.message);
-        return (data || []).map(row => row.date);
+    return getCached('holidays_all', async () => {
+        return retry(async () => {
+            const { data, error } = await supabase.from('holidays').select('date');
+            if (error) throw new Error(error.message);
+            return (data || []).map(row => row.date);
+        });
     });
 };
 
 const setHolidays = async (dates) => {
-    // Transaction-like logic. Retrying partly done ops is risky.
-    // But 'delete' + 'insert' is roughly idempotent IF dates are unique?
-    // We'll skip retry for this complex op for now.
-
-    // 1. Delete all holidays
-    // Note: We need a way to delete all. 'neq' is a useful workaround if ID is standard
-    // Or we can just delete where ID > 0
     const { error: deleteError } = await supabase.from('holidays').delete().gt('id', 0);
     if (deleteError) throw new Error(deleteError.message);
 
-    // 2. Insert new holidays if any
     if (dates.length > 0) {
         const rows = dates.map(date => ({ date }));
         const { error: insertError } = await supabase.from('holidays').insert(rows);
         if (insertError) throw new Error(insertError.message);
     }
-
+    invalidateCache('holidays');
     return { success: true };
 };
 
 // ==================== FACTORY RESET ====================
 
 const factoryReset = async () => {
-    // Delete all data (Idempotent, safe to retry potentially)
     return retry(async () => {
-        await supabase.from('attendance').delete().gt('id', ''); // String ID
+        await supabase.from('attendance').delete().gt('id', '');
         await supabase.from('advances').delete().gt('id', '');
         await supabase.from('debit_notes').delete().gt('id', '');
         await supabase.from('payments').delete().gt('id', '');
         await supabase.from('employees').delete().gt('id', '');
-        await supabase.from('holidays').delete().gt('id', 0); // Integer ID
+        await supabase.from('holidays').delete().gt('id', 0);
 
-        // Reset settings
         await supabase.from('settings').update({ standardHours: 8.5, slabHours: 6 }).eq('id', 1);
 
+        invalidateCache();
         return { success: true };
     });
 };

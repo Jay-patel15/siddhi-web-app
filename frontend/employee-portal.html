@@ -1315,6 +1315,8 @@
         <div style="position: relative; max-width: 100%; display: flex; flex-direction: column; align-items: center;">
             <img id="enhanced-preview-img" src="" onclick="event.stopPropagation()"
                 style="max-width: 100%; max-height: 80vh; border-radius: 8px; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5); object-fit: contain; transition: transform 0.2s;">
+            <iframe id="enhanced-preview-pdf" src="" onclick="event.stopPropagation()"
+                style="display:none; width:90vw; max-width:800px; height:75vh; border-radius:8px; border:none; background:white;"></iframe>
 
             <div style="margin-top: 1rem; text-align: center; color: white;">
                 <div id="preview-caption-title" style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem;">
@@ -1330,6 +1332,40 @@
     </div>
 
     <script>
+        // ==================== SMART CLIENT-SIDE API CACHING ====================
+        (function () {
+            const _originalFetch = window.fetch;
+            const _apiCache = new Map();
+            const CACHE_TTL = 15000;
+
+            window.clearApiCache = function () {
+                _apiCache.clear();
+            };
+
+            window.fetch = async function (resource, config) {
+                const url = typeof resource === 'string' ? resource : (resource && resource.url ? resource.url : '');
+                const method = (config && config.method) ? config.method.toUpperCase() : 'GET';
+
+                if (method === 'GET' && url.includes('/api/')) {
+                    const cached = _apiCache.get(url);
+                    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+                        return cached.response.clone();
+                    }
+                    const res = await _originalFetch(resource, config);
+                    if (res.ok) {
+                        _apiCache.set(url, { response: res.clone(), timestamp: Date.now() });
+                    }
+                    return res;
+                }
+
+                if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                    _apiCache.clear();
+                }
+
+                return _originalFetch(resource, config);
+            };
+        })();
+
         // --- 1 Hour Auto-Logout (Employees) ---
         (function checkAuth() {
             const sessionStr = localStorage.getItem('payroll_session');
@@ -2197,14 +2233,14 @@
                 const isUrl = p.url && p.url.startsWith('http');
                 return `
                 <div style="border-radius:12px; overflow:hidden; border:1px solid #e2e8f0; background:white; box-shadow:0 1px 4px rgba(0,0,0,0.07);">
-                    <div style="position:relative; cursor:pointer;" onclick="document.getElementById('enhanced-preview-modal').style.display='flex'; document.getElementById('enhanced-preview-img').src='${p.url}'; document.getElementById('preview-caption-title').textContent='${typeLabel} Photo'; document.getElementById('preview-caption-date').textContent='${p.date} ${formatTime12h(p.time)}';">
+                    <div style="position:relative; cursor:pointer;" onclick="showPreview('${p.url}', '${typeLabel} Photo', '${p.date}', '${formatTime12h(p.time)}')">
                         ${isUrl ? `<img src="${p.url}" loading="lazy" style="width:100%; height:140px; object-fit:cover; display:block;" onerror="this.parentElement.innerHTML='<div style=height:140px;display:flex;align-items:center;justify-content:center;background:#f1f5f9;>📷</div>'">` : `<div style="height:140px; display:flex; align-items:center; justify-content:center; background:#f1f5f9; font-size:2rem;">📷</div>`}
                         <span style="position:absolute; top:6px; left:6px; background:${typeColor}; color:white; font-size:0.65rem; font-weight:700; padding:2px 7px; border-radius:20px;">${typeLabel}</span>
                     </div>
                     <div style="padding:0.5rem 0.6rem;">
                         <div style="font-size:0.78rem; font-weight:600;">${p.date}</div>
                         <div style="font-size:0.72rem; color:#888;">${formatTime12h(p.time)}</div>
-                        ${isUrl ? `<a href="${p.url}" target="_blank" style="display:block; margin-top:5px; font-size:0.72rem; color:#6366f1; text-decoration:none; font-weight:600;">🔗 Open</a>` : ''}
+                        ${isUrl ? `<a href="#" onclick="showPreview('${p.url}', '${typeLabel} Photo', '${p.date}', '${formatTime12h(p.time)}'); return false;" style="display:block; margin-top:5px; font-size:0.72rem; color:#6366f1; text-decoration:none; font-weight:600;">🔍 Preview</a>` : ''}
                     </div>
                 </div>`;
             }).join('');
@@ -2805,23 +2841,37 @@
         let currentPreviewScale = 1;
 
         window.showPreview = function (url, title, date, amount) {
+            if (!url) return;
             const modal = document.getElementById('enhanced-preview-modal');
             const img = document.getElementById('enhanced-preview-img');
+            const pdf = document.getElementById('enhanced-preview-pdf');
             const titleEl = document.getElementById('preview-caption-title');
             const dateEl = document.getElementById('preview-caption-date');
 
-            img.src = url;
-            titleEl.innerText = title || 'Proof';
-            dateEl.innerText = `${date} • ₹${amount}`;
+            const isPdf = url.toLowerCase().endsWith('.pdf');
+            if (isPdf) {
+                if (img) img.style.display = 'none';
+                if (pdf) { pdf.src = url; pdf.style.display = 'block'; }
+            } else {
+                if (pdf) { pdf.src = ''; pdf.style.display = 'none'; }
+                if (img) { img.src = url; img.style.display = 'block'; }
+            }
+
+            if (titleEl) titleEl.innerText = title || 'Proof';
+            const amtStr = amount ? ` • ₹${amount}` : '';
+            if (dateEl) dateEl.innerText = `${date || ''}${amtStr}`;
 
             currentPreviewScale = 1;
-            img.style.transform = `scale(1)`;
+            if (img) img.style.transform = `scale(1)`;
 
-            modal.style.display = 'flex';
+            if (modal) modal.style.display = 'flex';
         }
 
         window.closeEnhancedPreview = function () {
-            document.getElementById('enhanced-preview-modal').style.display = 'none';
+            const modal = document.getElementById('enhanced-preview-modal');
+            if (modal) modal.style.display = 'none';
+            const pdf = document.getElementById('enhanced-preview-pdf');
+            if (pdf) pdf.src = '';
         }
 
 

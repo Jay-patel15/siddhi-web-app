@@ -5,6 +5,8 @@ const cors = require('cors');
 const path = require('path');
 const dns = require('node:dns');
 
+const zlib = require('zlib');
+
 // Force Node to prefer IPv4 (fixes many connectivity issues on Windows/WiFi)
 if (typeof dns.setDefaultResultOrder === 'function') {
     dns.setDefaultResultOrder('ipv4first');
@@ -17,6 +19,25 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
+
+// Native Gzip Compression Middleware for API Responses
+app.use('/api', (req, res, next) => {
+    const acceptEncoding = req.headers['accept-encoding'] || '';
+    if (req.method !== 'GET' || !acceptEncoding.includes('gzip')) return next();
+
+    const originalJson = res.json.bind(res);
+    res.json = (data) => {
+        const jsonStr = JSON.stringify(data);
+        zlib.gzip(jsonStr, (err, buffer) => {
+            if (err) return originalJson(data);
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Content-Encoding', 'gzip');
+            res.setHeader('Content-Length', buffer.length);
+            res.send(buffer);
+        });
+    };
+    next();
+});
 // Serve frontend static files (no-cache for HTML to prevent stale page issues)
 app.use(express.static(path.join(__dirname, 'frontend'), {
     setHeaders: (res, filePath) => {

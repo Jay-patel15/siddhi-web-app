@@ -1,5 +1,41 @@
 const API_URL = '/api';
 
+// ==================== SMART CLIENT-SIDE API CACHING ====================
+(function () {
+    const _originalFetch = window.fetch;
+    const _apiCache = new Map();
+    const CACHE_TTL = 15000; // 15s client-side cache TTL
+
+    window.clearApiCache = function () {
+        _apiCache.clear();
+    };
+
+    window.fetch = async function (resource, config) {
+        const url = typeof resource === 'string' ? resource : (resource && resource.url ? resource.url : '');
+        const method = (config && config.method) ? config.method.toUpperCase() : 'GET';
+
+        // Cache GET requests to /api/
+        if (method === 'GET' && url.includes('/api/')) {
+            const cached = _apiCache.get(url);
+            if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+                return cached.response.clone();
+            }
+            const res = await _originalFetch(resource, config);
+            if (res.ok) {
+                _apiCache.set(url, { response: res.clone(), timestamp: Date.now() });
+            }
+            return res;
+        }
+
+        // On any mutation (POST, PUT, DELETE), clear client cache
+        if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+            _apiCache.clear();
+        }
+
+        return _originalFetch(resource, config);
+    };
+})();
+
 // ==================== UTILS ====================
 function formatTimeTo12h(timeStr) {
     if (!timeStr) return '-';
@@ -1986,9 +2022,7 @@ async function updateModalData() {
     adv.forEach(a => {
         const tr = document.createElement('tr');
         const viewLink = a.screenshot ?
-            (a.screenshot.toLowerCase().endsWith('.pdf') ?
-                `<a href="${a.screenshot}" target="_blank" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>` :
-                `<a href="#" onclick="showPreview('${a.screenshot}', 'Advance Payment', '${a.date}', '${a.amount}'); return false;" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>`)
+            `<a href="#" onclick="showPreview('${a.screenshot.replace(/'/g, "\\'")}', 'Advance Payment', '${a.date}', '${a.amount}'); return false;" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>`
             : '-';
         tr.innerHTML = `
             <td data-label="Date">${a.date}</td>
@@ -2027,9 +2061,7 @@ async function updateModalData() {
         payments.forEach(p => {
             const tr = document.createElement('tr');
             const viewLink = p.screenshot ?
-                (p.screenshot.toLowerCase().endsWith('.pdf') ?
-                    `<a href="${p.screenshot}" target="_blank" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>` :
-                    `<a href="#" onclick="showPreview('${p.screenshot}', 'Salary Payment', '${p.date}', '${p.amount}'); return false;" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>`)
+                `<a href="#" onclick="showPreview('${p.screenshot.replace(/'/g, "\\'")}', 'Salary Payment', '${p.date}', '${p.amount}'); return false;" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>`
                 : '-';
 
             tr.innerHTML = `
@@ -2638,9 +2670,7 @@ async function loadAdvanceTable() {
         const dedMonth = adv.deductionMonth || adv.date.substring(0, 7);
         const tr = document.createElement('tr');
         const viewLink = adv.screenshot ?
-            (adv.screenshot.toLowerCase().endsWith('.pdf') ?
-                `<a href="${adv.screenshot}" target="_blank" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>` :
-                `<a href="#" onclick="showPreview('${adv.screenshot}', 'Advance Payment', '${adv.date}', '${adv.amount}'); return false;" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>`)
+            `<a href="#" onclick="showPreview('${adv.screenshot.replace(/'/g, "\\'")}', 'Advance Payment', '${adv.date}', '${adv.amount}'); return false;" style="color: var(--secondary); text-decoration: none; font-weight: 500;">View</a>`
             : '-';
 
         tr.innerHTML = `
@@ -2929,9 +2959,7 @@ async function loadPayroll() {
                 const safeUrl = (pay.screenshot || '').replace(/'/g, "\\'");
                 const safeDate = (pay.date || '').replace(/'/g, "\\'");
                 const proofLink = pay.screenshot
-                    ? (isPdf
-                        ? `<a href="${pay.screenshot}" target="_blank" style="color: var(--secondary); font-size: 0.78rem;">📄 Proof</a>`
-                        : `<a href="#" onclick="showPreview('${safeUrl}', 'Salary Payment', '${safeDate}', '${pay.amount}'); return false;" style="color: var(--secondary); font-size: 0.78rem;">🖼 Proof</a>`)
+                    ? `<a href="#" onclick="showPreview('${safeUrl}', 'Salary Payment', '${safeDate}', '${pay.amount}'); return false;" style="color: var(--secondary); font-size: 0.78rem;">${isPdf ? '📄 Proof' : '🖼 Proof'}</a>`
                     : '';
                 return `<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0; font-size: 0.85rem; border-bottom: 1px solid #f1f5f9;">
                         <span style="color: var(--dark);">₹${pay.amount} <span style="color: var(--gray); font-size: 0.75rem;">(${pay.date})</span></span>
@@ -3653,28 +3681,58 @@ async function confirmDelete() {
     }
 }
 
-// ========= IMAGE PREVIEW WITH NAVIGATION =========
+// ========= IMAGE & DOCUMENT PREVIEW WITH NAVIGATION =========
 
 let previewImages = [];
 let currentPreviewIndex = 0;
 
+function ensurePreviewOverlay() {
+    let overlay = document.getElementById('image-preview-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'image-preview-overlay';
+        overlay.className = 'image-preview-overlay';
+        overlay.onclick = function (e) { closeImagePreview(e); };
+        overlay.innerHTML = `
+            <div onclick="event.stopPropagation()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:0.75rem 1rem;flex-shrink:0;gap:0.5rem;">
+                <span id="preview-counter" style="color:white;font-size:0.9rem;font-weight:600;">1/1</span>
+                <button onclick="downloadCurrentImage()" style="background:var(--primary);color:white;border:none;padding:0.45rem 1.2rem;border-radius:20px;font-size:0.85rem;cursor:pointer;font-weight:600;">⬇ Download</button>
+                <button onclick="closeImagePreview()" style="background:rgba(255,255,255,0.15);color:white;border:none;width:36px;height:36px;border-radius:50%;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+            </div>
+            <div onclick="event.stopPropagation()" style="flex:1;width:100%;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;padding:0 1rem;">
+                <button id="preview-prev" onclick="prevImage()" style="position:absolute;left:0.5rem;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.2);border:none;width:44px;height:44px;border-radius:50%;font-size:1.4rem;cursor:pointer;color:white;z-index:2;">◀</button>
+                <img id="preview-image" src="" alt="Preview" style="max-width:100%;max-height:75vh;object-fit:contain;border-radius:10px;display:block;">
+                <iframe id="preview-pdf" src="" style="width:100%;max-width:900px;height:75vh;border:none;border-radius:10px;background:white;display:none;"></iframe>
+                <button id="preview-next" onclick="nextImage()" style="position:absolute;right:0.5rem;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.2);border:none;width:44px;height:44px;border-radius:50%;font-size:1.4rem;cursor:pointer;color:white;z-index:2;">▶</button>
+            </div>
+            <div class="image-preview-info" id="preview-info" onclick="event.stopPropagation()" style="width:100%;text-align:center;padding:0.75rem 1rem;color:white;font-size:0.95rem;font-weight:600;flex-shrink:0;background:rgba(0,0,0,0.4);"></div>
+        `;
+        document.body.appendChild(overlay);
+    } else {
+        const container = overlay.querySelector('img#preview-image')?.parentElement;
+        if (container && !document.getElementById('preview-pdf')) {
+            const iframe = document.createElement('iframe');
+            iframe.id = 'preview-pdf';
+            iframe.style.cssText = 'width:100%;max-width:900px;height:75vh;border:none;border-radius:10px;background:white;display:none;';
+            const nextBtn = document.getElementById('preview-next');
+            if (nextBtn) {
+                container.insertBefore(iframe, nextBtn);
+            } else {
+                container.appendChild(iframe);
+            }
+        }
+    }
+    return overlay;
+}
+
 function showPreview(url, title, date, amount) {
     if (!url) return;
 
-    if (url.toLowerCase().endsWith('.pdf')) {
-        window.open(url, '_blank');
-        return;
-    }
-
-    const overlay = document.getElementById('image-preview-overlay');
-    if (!overlay) {
-        window.open(url, '_blank');
-        return;
-    }
+    const overlay = ensurePreviewOverlay();
 
     previewImages = [{
         src: url,
-        type: title || 'Image Proof',
+        type: title || 'Proof',
         date: date || '',
         amount: amount || ''
     }];
@@ -3687,10 +3745,10 @@ function showPreview(url, title, date, amount) {
 }
 
 function openImagePreview(src, type, date, amount) {
-    const overlay = document.getElementById('image-preview-overlay');
+    const overlay = ensurePreviewOverlay();
 
     // Build list of images for navigation
-    if (_attGalleryMode && _attGalleryImages.length > 0) {
+    if (typeof _attGalleryMode !== 'undefined' && _attGalleryMode && typeof _attGalleryImages !== 'undefined' && _attGalleryImages.length > 0) {
         // Attendance photos mode
         previewImages = _attGalleryImages.map(p => ({
             src: p.url,
@@ -3699,48 +3757,74 @@ function openImagePreview(src, type, date, amount) {
             amount: p.time ? formatTimeTo12h(p.time) : '--',
             isAttPhoto: true
         }));
-    } else {
-        // Uploads mode (original behaviour)
+    } else if (typeof allGalleryImages !== 'undefined' && allGalleryImages.length > 0) {
+        // Uploads mode
         previewImages = allGalleryImages.map(img => ({
             src: img.screenshot,
             type: img.type,
             date: img.date,
             amount: img.amount
         }));
+    } else {
+        previewImages = [{
+            src: src,
+            type: type || 'Proof',
+            date: date || '',
+            amount: amount || ''
+        }];
     }
 
-    // Find the current image index
     currentPreviewIndex = previewImages.findIndex(i => i.src === src);
     if (currentPreviewIndex === -1) currentPreviewIndex = 0;
 
     updatePreviewImage();
     overlay.classList.add('active');
-
-    // Prevent body scroll
+    overlay.style.display = 'flex';
     document.body.style.overflow = 'hidden';
 }
 
 function updatePreviewImage() {
     const img = document.getElementById('preview-image');
+    const pdf = document.getElementById('preview-pdf');
     const info = document.getElementById('preview-info');
     const counter = document.getElementById('preview-counter');
 
     const current = previewImages[currentPreviewIndex];
     if (!current) return;
 
-    img.src = current.src;
+    const isPdf = current.src && current.src.toLowerCase().endsWith('.pdf');
 
-    if (current.isAttPhoto) {
-        info.innerHTML = `<strong>${current.type}</strong> • ${current.date} • ${current.amount}`;
+    if (isPdf) {
+        if (img) img.style.display = 'none';
+        if (pdf) {
+            pdf.src = current.src;
+            pdf.style.display = 'block';
+        }
     } else {
-        info.innerHTML = `<strong>${current.type === 'advance' ? 'Advance' : 'Payment'}</strong> • ${current.date} • ₹${current.amount}`;
+        if (pdf) {
+            pdf.src = '';
+            pdf.style.display = 'none';
+        }
+        if (img) {
+            img.src = current.src;
+            img.style.display = 'block';
+        }
+    }
+
+    if (info) {
+        if (current.isAttPhoto) {
+            info.innerHTML = `<strong>${current.type}</strong> • ${current.date} • ${current.amount}`;
+        } else {
+            const amtStr = current.amount ? ` • ₹${current.amount}` : '';
+            const typeStr = current.type === 'advance' ? 'Advance' : (current.type || 'Proof');
+            info.innerHTML = `<strong>${typeStr}</strong> • ${current.date || ''}${amtStr}`;
+        }
     }
 
     if (counter) {
         counter.innerText = `${currentPreviewIndex + 1} / ${previewImages.length}`;
     }
 
-    // Update nav button visibility
     const prevBtn = document.getElementById('preview-prev');
     const nextBtn = document.getElementById('preview-next');
     if (prevBtn) prevBtn.style.opacity = currentPreviewIndex > 0 ? '1' : '0.3';
@@ -3772,33 +3856,37 @@ async function downloadCurrentImage() {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${current.type}_${current.date}_${current.amount}.jpg`;
+        const ext = current.src.toLowerCase().endsWith('.pdf') ? 'pdf' : 'jpg';
+        link.download = `${current.type}_${current.date}_${current.amount || 'proof'}.${ext}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
     } catch (error) {
         console.error('Download failed:', error);
-        // Fallback
         window.open(current.src, '_blank');
     }
 }
 
 function closeImagePreview(event) {
-    // If event exists, only close if clicking the background overlay
     if (event && event.target.id !== 'image-preview-overlay') return;
 
     const overlay = document.getElementById('image-preview-overlay');
-    overlay.classList.remove('active');
+    if (overlay) {
+        overlay.classList.remove('active');
+        overlay.style.display = 'none';
+    }
 
-    // Restore body scroll
+    const pdf = document.getElementById('preview-pdf');
+    if (pdf) pdf.src = '';
+
     document.body.style.overflow = '';
 }
 
 // Close preview on Escape key, navigate with arrow keys
 document.addEventListener('keydown', function (e) {
     const overlay = document.getElementById('image-preview-overlay');
-    if (!overlay.classList.contains('active')) return;
+    if (!overlay || !overlay.classList.contains('active')) return;
 
     if (e.key === 'Escape') {
         closeImagePreview();
@@ -3955,30 +4043,6 @@ _Please contact admin for full PDF details._
 }
 // --- PREVIEW MODAL LOGIC (Global) ---
 let currentPreviewScale = 1;
-
-function showPreview(url, title, date, amount) {
-    const modal = document.getElementById('enhanced-preview-modal');
-    // Ensure modal exists in index.html, if not, we might need to add it dynamically or ensure it's there.
-    // Assuming index.html has the modal structure as added in previous steps.
-    if (!modal) {
-        console.error("Enhanced preview modal not found in DOM");
-        window.open(url, '_blank');
-        return;
-    }
-
-    const img = document.getElementById('enhanced-preview-img');
-    const titleEl = document.getElementById('preview-caption-title');
-    const dateEl = document.getElementById('preview-caption-date');
-
-    img.src = url;
-    if (titleEl) titleEl.innerText = title || 'Proof';
-    if (dateEl) dateEl.innerText = `${date} • ₹${amount}`;
-
-    currentPreviewScale = 1;
-    if (img) img.style.transform = `scale(1)`;
-
-    modal.style.display = 'flex';
-}
 
 function closeEnhancedPreview() {
     const modal = document.getElementById('enhanced-preview-modal');
