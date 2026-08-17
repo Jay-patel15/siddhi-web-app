@@ -3526,17 +3526,28 @@ function openGalleryModal(employeeId, employeeName) {
     currentGalleryEmployeeId = employeeId;
     selectedForDeletion = [];
 
-    document.getElementById('gallery-title').innerText = `📷 ${employeeName}'s Uploads`;
-    document.getElementById('gallery-date-filter').value = '';
-    document.getElementById('delete-selected-btn').style.display = 'none';
-    document.getElementById('select-all-btn').innerText = '☑️ Select All';
+    const titleEl = document.getElementById('gallery-title');
+    if (titleEl) titleEl.innerText = `📷 ${employeeName}'s Uploads`;
+
+    const dateFilterEl = document.getElementById('gallery-date-filter');
+    if (dateFilterEl) dateFilterEl.value = '';
+
+    const deleteBtn = document.getElementById('delete-selected-btn');
+    if (deleteBtn) deleteBtn.style.display = 'none';
+
+    const downloadBtn = document.getElementById('download-selected-btn');
+    if (downloadBtn) downloadBtn.style.display = 'none';
+
+    const selectAllBtn = document.getElementById('select-all-btn');
+    if (selectAllBtn) selectAllBtn.innerText = '☑️ Select All';
 
     // Filter uploads for this employee
     allGalleryImages = uploadsData.filter(u => String(u.employeeId) === String(employeeId));
 
     renderGalleryImages(allGalleryImages);
 
-    document.getElementById('gallery-modal').style.display = 'flex';
+    const modalEl = document.getElementById('gallery-modal');
+    if (modalEl) modalEl.style.display = 'flex';
 }
 
 function closeGalleryModal() {
@@ -4226,11 +4237,20 @@ function openAttPhotoGallery(employeeId, employeeName) {
     _attGalleryMode = true;
     _attSelectedForDeletion = [];
 
-    document.getElementById('gallery-title').innerText = `📸 ${employeeName}'s Attendance Photos`;
-    document.getElementById('gallery-date-filter').value = '';
-    document.getElementById('delete-selected-btn').style.display = 'none';
-    document.getElementById('download-selected-btn').style.display = 'none';
-    document.getElementById('select-all-btn').innerText = '☑️ Select All';
+    const titleEl = document.getElementById('gallery-title');
+    if (titleEl) titleEl.innerText = `📸 ${employeeName}'s Attendance Photos`;
+
+    const dateFilterEl = document.getElementById('gallery-date-filter');
+    if (dateFilterEl) dateFilterEl.value = '';
+
+    const deleteBtn = document.getElementById('delete-selected-btn');
+    if (deleteBtn) deleteBtn.style.display = 'none';
+
+    const downloadBtn = document.getElementById('download-selected-btn');
+    if (downloadBtn) downloadBtn.style.display = 'none';
+
+    const selectAllBtn = document.getElementById('select-all-btn');
+    if (selectAllBtn) selectAllBtn.innerText = '☑️ Select All';
 
     // get current month filter from the page
     const monthFilter = (document.getElementById('att-photo-month-filter')?.value || '').trim();
@@ -4241,7 +4261,9 @@ function openAttPhotoGallery(employeeId, employeeName) {
     });
 
     _renderAttGalleryImages(_attGalleryImages);
-    document.getElementById('gallery-modal').style.display = 'flex';
+
+    const modalEl = document.getElementById('gallery-modal');
+    if (modalEl) modalEl.style.display = 'flex';
 }
 
 function _renderAttGalleryImages(images) {
@@ -4409,7 +4431,10 @@ function toggleSelectAllGalleryImages() {
         downloadBtn.innerText = `⬇️ Download (${count})`;
     }
 
-    document.getElementById('select-all-btn').innerText = wasAllSelected ? '☑️ Select All' : '⬜ Deselect All';
+    const selectAllBtn = document.getElementById('select-all-btn');
+    if (selectAllBtn) {
+        selectAllBtn.innerText = wasAllSelected ? '☑️ Select All' : '⬜ Deselect All';
+    }
 }
 window.toggleSelectAllGalleryImages = toggleSelectAllGalleryImages;
 

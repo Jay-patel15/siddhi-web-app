@@ -87,6 +87,7 @@
             <div style="padding:0.75rem 1rem;border-top:1px solid var(--gray);background:var(--light);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
                 <span id="gallery-count" style="color:var(--gray);font-size:0.9rem;">0 images</span>
                 <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                    <button class="btn" onclick="toggleSelectAllGalleryImages()" id="select-all-btn" style="background:var(--gray);color:white;padding:0.5rem 1rem;font-size:0.85rem;">☑️ Select All</button>
                     <button class="btn" onclick="downloadSelectedImages()" id="download-selected-btn" style="display:none;background:var(--primary);color:white;padding:0.5rem 1rem;font-size:0.85rem;">⬇️ Download</button>
                     <button class="btn" onclick="deleteSelectedImages()" id="delete-selected-btn" style="display:none;background:var(--danger);color:white;padding:0.5rem 1rem;font-size:0.85rem;">🗑️ Delete</button>
                 </div>
