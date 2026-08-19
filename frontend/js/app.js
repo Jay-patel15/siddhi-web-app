@@ -1064,7 +1064,7 @@ async function loadDashboard() {
         const empAtt = monthlyAttByEmp.get(empIdStr) || [];
         let empEarned = 0;
         empAtt.forEach(att => {
-            const wh = parseFloat(att.workedHours);
+            const wh = parseFloat(att.workedHours || att.totalHours || att.worked_hours || att.hours || 0);
             if (isNaN(wh)) return;
 
             const sal = parseFloat(emp.salary);
@@ -1141,7 +1141,7 @@ async function loadDashboard() {
 
         let pastEarnings = 0;
         empPastAtt.forEach(att => {
-            const wh = parseFloat(att.workedHours);
+            const wh = parseFloat(att.workedHours || att.totalHours || att.worked_hours || att.hours || 0);
             if (isNaN(wh)) return;
             const sal = parseFloat(emp.salary);
             const normalRate = sal / globalSettings.standardHours;
@@ -1449,7 +1449,7 @@ async function downloadPayslipPDF() {
         const slabHourlyRate = emp.salary / globalSettings.slabHours;
 
         att.forEach(a => {
-            const wh = parseFloat(a.workedHours);
+            const wh = parseFloat(a.workedHours || a.totalHours || a.worked_hours || a.hours || 0);
             totalHours += wh;
             totalFare += parseFloat(a.fare || 0);
 
@@ -3012,12 +3012,16 @@ async function loadPayroll() {
         card.style.border = '1px solid var(--gray, #e2e8f0)';
         card.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
 
+        const displayNetLabel = paidTotal > 0 ? (remainingDue <= 0 ? 'Net Payable (Settled)' : 'Remaining Net Payable') : 'Net Payable';
+        const displayAmount = remainingDue;
+        const subTotalNote = paidTotal > 0 && remainingDue > 0 ? `<span style="font-size:0.75rem;font-weight:normal;color:var(--gray);"> (Total: ₹${p.finalPayable})</span>` : '';
+
         card.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
                 <div>
                     <h3 style="margin: 0; font-size: 1.1rem;">${p.employee.name}</h3>
-                    <div style="font-size: 0.85rem; color: var(--gray); margin-top: 4px;">Net Payable</div>
-                    <div style="font-size: 1.5rem; font-weight: bold; color: var(--dark);">₹${p.finalPayable}</div>
+                    <div style="font-size: 0.85rem; color: var(--gray); margin-top: 4px;">${displayNetLabel}</div>
+                    <div style="font-size: 1.5rem; font-weight: bold; color: ${remainingDue <= 0 && paidTotal > 0 ? '#10b981' : (paidTotal > 0 ? '#d97706' : 'var(--dark)')};">₹${displayAmount}${subTotalNote}</div>
                 </div>
                 <div style="text-align: right;">
                     <span style="background: ${statusColor}; color: white; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: bold;">
@@ -3350,7 +3354,7 @@ function exportToCSV() {
 
     // Prepare Attendance Rows
     const attendanceRows = empAtt.map(att => {
-        const wh = parseFloat(att.workedHours);
+        const wh = parseFloat(att.workedHours || att.totalHours || att.worked_hours || att.hours || 0);
         const salary = parseFloat(emp.salary);
         const stdHours = globalSettings.standardHours;
         const slabBase = globalSettings.slabHours;
@@ -4026,7 +4030,7 @@ async function sharePayslipWhatsApp() {
     const slabHourlyRate = emp.salary / globalSettings.slabHours;
 
     att.forEach(a => {
-        const wh = parseFloat(a.workedHours);
+        const wh = parseFloat(a.workedHours || a.totalHours || a.worked_hours || a.hours || 0);
         totalFare += parseFloat(a.fare || 0);
 
         if (a.slabMode && wh > globalSettings.standardHours) {

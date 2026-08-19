@@ -57,7 +57,7 @@ router.get('/', async (req, res) => {
                 daysWorked = empAtt.length;
                 empAtt.forEach(att => {
                     let dailySalary = 0;
-                    const workedHours = parseFloat(att.workedHours);
+                    const workedHours = parseFloat(att.workedHours || att.totalHours || att.worked_hours || att.hours || 0);
                     if (isNaN(workedHours)) return;
 
                     const salary = parseFloat(emp.salary);
@@ -148,7 +148,7 @@ router.get('/', async (req, res) => {
                 let pastEarnings = 0;
                 pastAtt.forEach(att => {
                     let dailySalary = 0;
-                    const workedHours = parseFloat(att.workedHours);
+                    const workedHours = parseFloat(att.workedHours || att.totalHours || att.worked_hours || att.hours || 0);
                     if (isNaN(workedHours)) return;
 
                     const salary = parseFloat(emp.salary);
