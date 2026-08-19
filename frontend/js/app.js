@@ -1851,7 +1851,7 @@ async function updateModalData() {
 
     // Filter Data for Specific Employee and Month
     const att = allAttendance.filter(a => String(a.employeeId) === String(emp.id) && a.date.startsWith(month));
-    const adv = allAdvances.filter(a => String(a.employeeId) === String(emp.id) && (a.deductionMonth || a.date.substring(0, 7)) === month);
+    const adv = allAdvances.filter(a => String(a.employeeId) === String(emp.id) && (a.deductionMonth ? a.deductionMonth === month : a.date.startsWith(month)));
     const deb = allDebitNotes.filter(d => String(d.employeeId) === String(emp.id) && (d.deductionMonth || (d.date ? d.date.substring(0, 7) : '')) === month);
     const payments = allPayments.filter(p => String(p.employeeId) === String(emp.id) && p.salaryMonth === month);
 
@@ -1909,7 +1909,7 @@ async function updateModalData() {
 
         // Sort Attendance by Date
         att.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(a => {
-            const wh = parseFloat(a.workedHours);
+            const wh = parseFloat(a.workedHours || a.totalHours || a.worked_hours || a.hours || 0);
             const sal = parseFloat(emp.salary);
             const normalRate = sal / globalSettings.standardHours;
             let dayPay = 0;
@@ -2004,7 +2004,7 @@ async function updateModalData() {
             prevBalCard.className = 'stat-card card-neutral';
         } else {
             const isNeg = previousBalance < 0;
-            prevBalEl.innerHTML = `<span style="font-weight: bold;">${previousBalance > 0 ? '+' : ''}₹${previousBalance}</span>`;
+            prevBalEl.innerHTML = `<span style="font-weight: bold; white-space: nowrap; display: inline-block;">${previousBalance > 0 ? '+' : ''}₹${previousBalance}</span>`;
             prevBalCard.className = `stat-card ${isNeg ? 'card-negative' : 'card-positive'}`;
         }
     }
@@ -2018,7 +2018,7 @@ async function updateModalData() {
     if (totalOTPay > 0) numParts.push(`₹${Math.round(totalOTPay)}`);
     if (totalFare > 0) numParts.push(`₹${Math.round(totalFare)}`);
     const numbersLine = numParts.join('+');
-    const numHtml = `<div style="font-size:0.6em;font-weight:normal;margin-top:2px;opacity:0.8;">${numbersLine}</div>`;
+    const numHtml = `<div style="font-size:0.6em;font-weight:normal;margin-top:2px;opacity:0.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${numbersLine}</div>`;
 
     const dueAmount = Math.round(net - totalPaid);
 
@@ -2026,10 +2026,10 @@ async function updateModalData() {
         payableEl.innerHTML = `<span style="font-weight:bold;">SETTLED</span>${numHtml}`;
         payableCard.className = 'stat-card card-positive';
     } else if (totalPaid > 0) {
-        payableEl.innerHTML = `₹${dueAmount}${numHtml}<div style="font-size:0.58em;font-weight:normal;margin-top:2px;opacity:0.8;">Due:₹${dueAmount} | Pd:₹${totalPaid}</div>`;
+        payableEl.innerHTML = `<span style="white-space:nowrap;display:inline-block;">₹${dueAmount}</span>${numHtml}<div style="font-size:0.58em;font-weight:normal;margin-top:2px;opacity:0.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Due:₹${dueAmount} | Pd:₹${totalPaid}</div>`;
         payableCard.className = 'stat-card card-warning';
     } else {
-        payableEl.innerHTML = `₹${Math.round(net)}${numHtml}`;
+        payableEl.innerHTML = `<span style="white-space:nowrap;display:inline-block;">₹${Math.round(net)}</span>${numHtml}`;
         payableCard.className = 'stat-card card-neutral';
     }
 

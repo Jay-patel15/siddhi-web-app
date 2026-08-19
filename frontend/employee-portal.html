@@ -177,7 +177,7 @@
         }
 
         .stat-card {
-            padding: 1.25rem;
+            padding: 1rem 0.75rem;
             border-radius: 8px;
             text-align: center;
         }
@@ -189,7 +189,7 @@
         }
 
         .stat-value {
-            font-size: 1.75rem;
+            font-size: 1.4rem;
             font-weight: 700;
         }
 
@@ -2401,7 +2401,7 @@
             // Filter advances for this employee and month
             const myAdvances = (allData.advances || []).filter(a =>
                 String(a.employeeId) === String(currentEmployee.id) &&
-                (a.date.startsWith(month) || a.deductionMonth === month)
+                (a.deductionMonth ? a.deductionMonth === month : a.date.startsWith(month))
             );
 
             // Filter debit notes for this employee and month
@@ -2470,10 +2470,10 @@
                     const val = document.getElementById('stat-net');
                     if (val) {
                         if (netDue <= 0 && totalPaymentsFixed > 0) {
-                            val.innerHTML = '<span style="font-weight:bold;">SETTLED</span><div style="font-size:0.6em;opacity:0.8;">Adv: ₹' + Math.round(totalAdvancesFixed) + ' | Debit: ₹' + Math.round(totalDebitNotesFixed) + ' | Paid: ₹' + Math.round(totalPaymentsFixed) + '</div>';
+                            val.innerHTML = '<span style="font-weight:bold;">SETTLED</span><div style="font-size:0.6em;opacity:0.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Adv: ₹' + Math.round(totalAdvancesFixed) + ' | Debit: ₹' + Math.round(totalDebitNotesFixed) + ' | Paid: ₹' + Math.round(totalPaymentsFixed) + '</div>';
                         } else {
                             const fareNote = monthlyFare > 0 ? ' + Fare: ₹' + Math.round(monthlyFare) : '';
-                            val.innerHTML = '₹' + netDue + '<div style="font-size:0.6em;opacity:0.8;margin-top:2px;">Salary: ₹' + Math.round(monthlySalary) + fareNote + ' | Adv: ₹' + Math.round(totalAdvancesFixed) + ' | Debit: ₹' + Math.round(totalDebitNotesFixed) + ' | Paid: ₹' + Math.round(totalPaymentsFixed) + '</div>';
+                            val.innerHTML = '<span style="white-space:nowrap;display:inline-block;">₹' + netDue + '</span><div style="font-size:0.6em;opacity:0.8;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Salary: ₹' + Math.round(monthlySalary) + fareNote + ' | Adv: ₹' + Math.round(totalAdvancesFixed) + ' | Debit: ₹' + Math.round(totalDebitNotesFixed) + ' | Paid: ₹' + Math.round(totalPaymentsFixed) + '</div>';
                         }
                     }
                     netCard.style.display = '';
@@ -2487,7 +2487,7 @@
                         prevEl.innerHTML = '<span style="color:inherit">-</span>';
                         prevCard.className = 'stat-card prev-bal-neutral';
                     } else {
-                        prevEl.innerHTML = `<span>${pastBalance > 0 ? '+' : ''}&#8377;${pastBalance}</span>`;
+                        prevEl.innerHTML = `<span style="font-weight:bold; white-space:nowrap; display:inline-block;">${pastBalance > 0 ? '+' : ''}&#8377;${pastBalance}</span>`;
                         prevCard.className = `stat-card ${pastBalance < 0 ? 'prev-bal-neg' : 'prev-bal-pos'}`;
                     }
                     prevCard.style.display = '';
@@ -2522,7 +2522,7 @@
             const slabHours = (allData.settings && allData.settings.slabHours) ? parseFloat(allData.settings.slabHours) : 6;
 
             myAttendance.forEach(att => {
-                const wh = parseFloat(att.workedHours);
+                const wh = parseFloat(att.workedHours || att.totalHours || att.worked_hours || att.hours || 0);
                 const salary = parseFloat(currentEmployee.salary);
                 const normalRate = salary / stdHours;
                 let dayPay = 0;
@@ -2573,7 +2573,7 @@
             let pastEarnings = 0;
 
             pastAtt.forEach(att => {
-                const wh = parseFloat(att.workedHours);
+                const wh = parseFloat(att.workedHours || att.totalHours || att.worked_hours || att.hours || 0);
                 const salary = parseFloat(currentEmployee.salary);
                 const normalRate = salary / stdHours;
                 let dayPay = 0;
@@ -2639,7 +2639,7 @@
                 const numParts = [`₹${Math.round(totalBasePay)}`];
                 if (totalOTPay > 0) numParts.push(`₹${Math.round(totalOTPay)}`);
                 if (totalFare > 0) numParts.push(`₹${Math.round(totalFare)}`);
-                const numHtml = `<div style="font-size:0.6em;font-weight:normal;margin-top:2px;opacity:0.8;color:inherit;">${numParts.join('+')}</div>`;
+                const numHtml = `<div style="font-size:0.6em;font-weight:normal;margin-top:2px;opacity:0.8;color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${numParts.join('+')}</div>`;
 
                 const dueAmount = Math.round(netPayable);
                 const val = document.getElementById('stat-net');
@@ -2647,9 +2647,9 @@
                     if (totalPayments > 0 && dueAmount <= 0) {
                         val.innerHTML = `<span style="font-weight:bold;">SETTLED</span>${numHtml}`;
                     } else if (totalPayments > 0) {
-                        val.innerHTML = `₹${dueAmount}${numHtml}<div style="font-size:0.58em;font-weight:normal;margin-top:2px;opacity:0.8;">Due:₹${dueAmount} | Pd:₹${totalPayments}</div>`;
+                        val.innerHTML = `<span style="white-space:nowrap;display:inline-block;">₹${dueAmount}</span>${numHtml}<div style="font-size:0.58em;font-weight:normal;margin-top:2px;opacity:0.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Due:₹${dueAmount} | Pd:₹${totalPayments}</div>`;
                     } else {
-                        val.innerHTML = `₹${dueAmount}${numHtml}`;
+                        val.innerHTML = `<span style="white-space:nowrap;display:inline-block;">₹${dueAmount}</span>${numHtml}`;
                     }
                 }
             }
@@ -2663,7 +2663,7 @@
                 prevCard.className = 'stat-card prev-bal-neutral';
             } else {
                 const isNeg = previousBalance < 0;
-                prevEl.innerHTML = `<span>${previousBalance > 0 ? '+' : ''}₹${previousBalance}</span>`;
+                prevEl.innerHTML = `<span style="font-weight:bold; white-space:nowrap; display:inline-block;">${previousBalance > 0 ? '+' : ''}₹${previousBalance}</span>`;
                 prevCard.className = `stat-card ${isNeg ? 'prev-bal-neg' : 'prev-bal-pos'}`;
             }
 

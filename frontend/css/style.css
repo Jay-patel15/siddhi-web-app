@@ -758,7 +758,7 @@ tr:hover {
 .stat-card {
     background: linear-gradient(135deg, var(--primary), var(--primary-hover));
     color: white;
-    padding: 1.5rem;
+    padding: 1rem 0.75rem;
     border-radius: var(--radius);
     display: flex;
     flex-direction: column;
@@ -791,11 +791,13 @@ tr:hover {
 }
 
 .stat-value {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 700;
     line-height: 1.1;
     overflow: hidden;
-    word-break: break-word;
+    word-break: normal;
+    overflow-wrap: normal;
+    white-space: normal;
 }
 
 /* Grid Helper */
