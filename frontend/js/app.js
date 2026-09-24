@@ -1857,16 +1857,34 @@ async function updateModalData() {
 
     // Calculate Stats
     const isSupervisorUpdate = emp.employee_type === 'fixed_salary';
-    const year = parseInt(month.split('-')[0]);
-    const mon = parseInt(month.split('-')[1]);
-    const daysInMonth = new Date(year, mon, 0).getDate();
+    const [selYear, selMon] = month.split('-').map(Number);
+    const daysInMonth = new Date(selYear, selMon, 0).getDate();
 
-    // Count holidays in this month
-    const hols = holidays.filter(h => h.startsWith(month)).length;
+    // Calculate days elapsed till date for the selected month
+    const now = new Date();
+    const todayYYYY = now.getFullYear();
+    const todayMM = now.getMonth() + 1;
+    const todayDD = now.getDate();
+
+    let daysTillDate = daysInMonth;
+    if (selYear < todayYYYY || (selYear === todayYYYY && selMon < todayMM)) {
+        daysTillDate = daysInMonth; // Past month: all days elapsed
+    } else if (selYear > todayYYYY || (selYear === todayYYYY && selMon > todayMM)) {
+        daysTillDate = 0; // Future month: 0 days elapsed
+    } else {
+        daysTillDate = todayDD; // Current month: days elapsed up to today
+    }
+
+    // Count holidays in this month up to today
+    const holsTillDate = holidays.filter(h => {
+        if (!h.startsWith(month)) return false;
+        const dayNum = parseInt(h.split('-')[2], 10);
+        return dayNum <= daysTillDate;
+    }).length;
 
     const present = att.length;
-    const workingDays = daysInMonth - hols;
-    const absent = Math.max(0, workingDays - present);
+    const workingDaysTillDate = Math.max(0, daysTillDate - holsTillDate);
+    const absent = Math.max(0, workingDaysTillDate - present);
 
     let earned = 0;
     let totalNormalHours = 0;
