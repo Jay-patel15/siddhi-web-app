@@ -702,8 +702,8 @@ async function exportAllDataToExcel() {
         btn.innerHTML = '⏳ Generating Excel...';
         btn.disabled = true;
 
-        const startDateInput = document.getElementById('export-all-start-date').value || '2026-03-01';
-        const endDateInput = document.getElementById('export-all-end-date').value || '2050-12-31';
+        const startDateInput = document.getElementById('export-all-start-date')?.value || '2026-01-01';
+        const endDateInput = document.getElementById('export-all-end-date')?.value || '2050-12-31';
 
         // Fetch fresh data
         const [empRes, attRes, advRes, payRes] = await Promise.all([
@@ -722,6 +722,27 @@ async function exportAllDataToExcel() {
         const advances = await advRes.json();
         const payments = await payRes.json();
 
+        const formatDecodedIST = (url) => {
+            if (!url) return '';
+            const m = url.match(/_(\d{13})\.jpe?g/i);
+            if (!m) return '';
+            const d = new Date(Number(m[1]));
+            return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        };
+
+        const getMapUrl = (loc) => {
+            if (!loc) return '';
+            if (typeof loc === 'object' && loc.lat && loc.lng) return `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
+            if (typeof loc === 'string' && loc.includes(',')) return `https://www.google.com/maps?q=${loc.trim()}`;
+            return '';
+        };
+
+        const getLocDisplay = (loc) => {
+            if (!loc) return '';
+            if (typeof loc === 'object' && loc.lat && loc.lng) return `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`;
+            return String(loc);
+        };
+
         // 1. Prepare Employee Data
         const empData = employees.map(e => ({
             "Employee ID": e.customId || e.id,
@@ -733,18 +754,73 @@ async function exportAllDataToExcel() {
             "Slab Hours": e.slabBaseHours || globalSettings.slabHours
         }));
 
-        // 2. Prepare Attendance Data (Filtered)
+        // 2. Prepare Attendance Data (Filtered) with Photo Timestamps & Mismatch Detection
         const filteredAtt = attendance.filter(a => a.date >= startDateInput && a.date <= endDateInput);
-        const attData = filteredAtt.map(a => ({
-            "Record ID": a.id,
-            "Date": a.date,
-            "Employee ID": a.employeeId,
-            "Employee Name": a.employeeName,
-            "Time In": a.timeIn,
-            "Time Out": a.timeOut,
-            "Worked Hours": a.workedHours,
-            "Calculated Fare": a.fare
-        }));
+        const mismatches = [];
+        const attData = filteredAtt.map(a => {
+            const inUploadIST = formatDecodedIST(a.checkInImage);
+            const outUploadIST = formatDecodedIST(a.checkOutImage);
+
+            let discrepancyStatus = 'Normal';
+            let diffHours = '';
+            if (a.timeOut && a.checkOutImage && a.date) {
+                const m = a.checkOutImage.match(/_(\d{13})\.jpe?g/i);
+                if (m) {
+                    const uploadTime = Number(m[1]);
+                    const parts = a.timeOut.split(':');
+                    if (parts.length >= 2) {
+                        const recDate = new Date(a.date + 'T00:00:00+05:30');
+                        recDate.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), 0, 0);
+                        if (a.timeIn) {
+                            const inParts = a.timeIn.split(':');
+                            if (inParts.length >= 2 && parseInt(parts[0], 10) < parseInt(inParts[0], 10)) {
+                                recDate.setDate(recDate.getDate() + 1);
+                            }
+                        }
+                        const diffMin = Math.round((recDate.getTime() - uploadTime) / (1000 * 60));
+                        if (Math.abs(diffMin) > 30) {
+                            diffHours = (diffMin / 60).toFixed(2);
+                            discrepancyStatus = `MISMATCH (${diffHours > 0 ? '+' : ''}${diffHours}h)`;
+                            mismatches.push({
+                                "Date": a.date,
+                                "Employee Name": a.employeeName,
+                                "Employee ID": a.employeeId,
+                                "Recorded Check-In": a.timeIn,
+                                "Recorded Check-Out": a.timeOut,
+                                "Photo Upload Time (IST)": outUploadIST,
+                                "Discrepancy (Hours)": diffHours,
+                                "Check-Out Photo Link": a.checkOutImage,
+                                "Location Coordinates": getLocDisplay(a.checkOutLoc),
+                                "Google Maps Link": getMapUrl(a.checkOutLoc),
+                                "Worked Hours": a.workedHours
+                            });
+                        }
+                    }
+                }
+            }
+
+            return {
+                "Record ID": a.id,
+                "Date": a.date,
+                "Employee ID": a.employeeId,
+                "Employee Name": a.employeeName,
+                "Recorded Time In": a.timeIn,
+                "In Photo Upload Time (IST)": inUploadIST,
+                "In Photo URL": a.checkInImage || '',
+                "In Map Link": getMapUrl(a.checkInLoc),
+                "Recorded Time Out": a.timeOut,
+                "Out Photo Upload Time (IST)": outUploadIST,
+                "Photo Discrepancy": discrepancyStatus,
+                "Discrepancy (Hours)": diffHours,
+                "Out Photo URL": a.checkOutImage || '',
+                "Out Map Link": getMapUrl(a.checkOutLoc),
+                "Worked Hours": a.workedHours,
+                "Calculated Fare": a.fare,
+                "Slab Mode": a.slabMode ? 'Yes' : 'No',
+                "Sunday Mode": a.sundayMode ? 'Yes' : 'No',
+                "Security Flag": a.securityFlag || 'SECURE'
+            };
+        });
 
         // 3. Prepare Advances Data (Filtered by date or month)
         const startMonthStr = startDateInput.substring(0, 7);
@@ -792,14 +868,26 @@ async function exportAllDataToExcel() {
         const wsPay = XLSX.utils.json_to_sheet(payData);
 
         // Define column widths for better readability
-        const wscols = [{ wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
-        wsEmp['!cols'] = wscols;
-        wsAtt['!cols'] = wscols;
-        wsAdv['!cols'] = wscols;
-        wsPay['!cols'] = wscols;
+        wsEmp['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+        wsAtt['!cols'] = [
+            { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 18 }, { wch: 12 },
+            { wch: 25 }, { wch: 35 }, { wch: 35 }, { wch: 12 }, { wch: 25 },
+            { wch: 20 }, { wch: 16 }, { wch: 35 }, { wch: 35 }, { wch: 12 },
+            { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }
+        ];
+        wsAdv['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+        wsPay['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
 
         // Create Workbook and Append Sheets
         const wb = XLSX.utils.book_new();
+        if (mismatches.length > 0) {
+            const wsMismatches = XLSX.utils.json_to_sheet(mismatches);
+            wsMismatches['!cols'] = [
+                { wch: 12 }, { wch: 18 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+                { wch: 25 }, { wch: 18 }, { wch: 35 }, { wch: 20 }, { wch: 35 }, { wch: 12 }
+            ];
+            XLSX.utils.book_append_sheet(wb, wsMismatches, "Photo_Audit_Mismatches");
+        }
         XLSX.utils.book_append_sheet(wb, wsEmp, "Employee");
         XLSX.utils.book_append_sheet(wb, wsAtt, "Attendance");
         XLSX.utils.book_append_sheet(wb, wsAdv, "advance");
@@ -825,6 +913,93 @@ async function exportAllDataToExcel() {
         }
     }
 }
+
+async function downloadMasterAuditExcel() {
+    const btn = event?.currentTarget || document.getElementById('btn-download-audit-excel');
+    const origText = btn ? btn.innerHTML : '';
+    try {
+        if (btn) {
+            btn.innerHTML = '⏳ Generating Full Audit Excel...';
+            btn.disabled = true;
+        }
+
+        const response = await fetch(`${API_URL}/attendance/export-audit-excel`);
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `Siddhi_Full_Attendance_Audit_Log_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        if (btn) {
+            btn.innerHTML = '✅ Download Started!';
+            setTimeout(() => {
+                btn.innerHTML = origText;
+                btn.disabled = false;
+            }, 3000);
+        }
+    } catch (err) {
+        console.error('Audit export error:', err);
+        alert('Could not download audit log: ' + err.message);
+        if (btn) {
+            btn.innerHTML = origText;
+            btn.disabled = false;
+        }
+    }
+}
+window.downloadMasterAuditExcel = downloadMasterAuditExcel;
+
+async function downloadSupabaseLogsExcel() {
+    const btn = event?.currentTarget || document.getElementById('btn-download-supabase-logs');
+    const origText = btn ? btn.innerHTML : '';
+    try {
+        if (btn) {
+            btn.innerHTML = '⏳ Generating Supabase HTTP Logs (200 GET/POST)...';
+            btn.disabled = true;
+        }
+
+        const response = await fetch(`${API_URL}/logs/export-excel`);
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `Supabase_HTTP_API_Logs_Master_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        if (btn) {
+            btn.innerHTML = '✅ Download Started!';
+            setTimeout(() => {
+                btn.innerHTML = origText;
+                btn.disabled = false;
+            }, 3000);
+        }
+    } catch (err) {
+        console.error('Supabase logs export error:', err);
+        alert('Could not download Supabase HTTP logs: ' + err.message);
+        if (btn) {
+            btn.innerHTML = origText;
+            btn.disabled = false;
+        }
+    }
+}
+window.downloadSupabaseLogsExcel = downloadSupabaseLogsExcel;
+
 
 async function importExcelData() {
     const fileInput = document.getElementById('import-excel-file');
@@ -4339,25 +4514,69 @@ function _renderAttGalleryImages(images) {
         const typeColor = p.type === 'in' ? '#10b981' : '#ef4444';
         const timeFormatted = p.time ? formatTimeTo12h(p.time) : '--';
 
+        // Extract server-verified upload time from filename timestamp
+        const uploadMatch = p.url ? p.url.match(/_(\d{13})\.jpe?g/i) : null;
+        let uploadTimeFormatted = '';
+        let isMismatch = false;
+        let mismatchNote = '';
+
+        if (uploadMatch) {
+            const uploadDate = new Date(Number(uploadMatch[1]));
+            uploadTimeFormatted = uploadDate.toLocaleTimeString('en-IN', {
+                timeZone: 'Asia/Kolkata',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+
+            if (p.time && p.date) {
+                const parts = p.time.split(':');
+                if (parts.length >= 2) {
+                    const recDate = new Date(p.date + 'T00:00:00+05:30');
+                    recDate.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), 0, 0);
+                    const diffMin = Math.round((recDate.getTime() - uploadDate.getTime()) / (1000 * 60));
+                    if (Math.abs(diffMin) > 30) {
+                        isMismatch = true;
+                        const diffHours = (diffMin / 60).toFixed(1);
+                        mismatchNote = diffMin > 0 
+                            ? `⚠️ Photo uploaded ${diffHours}h earlier` 
+                            : `⚠️ Photo uploaded ${Math.abs(diffHours)}h later`;
+                    }
+                }
+            }
+        }
+
         const item = document.createElement('div');
         item.className = 'gallery-item';
-        item.style.cssText = `position:relative; border-radius:10px; overflow:hidden; background:var(--light); border:2px solid ${isSelected ? 'var(--danger)' : 'transparent'}; transition:all 0.2s;`;
+        item.style.cssText = `position:relative; border-radius:10px; overflow:hidden; background:var(--light); border:2px solid ${isSelected ? 'var(--danger)' : (isMismatch ? '#f87171' : 'transparent')}; transition:all 0.2s;`;
 
         item.innerHTML = `
             <div style="position:relative;">
                 <img src="${p.url}" alt="Attendance Photo"
                     style="width:100%; height:150px; object-fit:cover; cursor:pointer;"
-                    onclick="openImagePreview('${p.url}', '${typeLabel}', '${p.date}', '${timeFormatted}')"
+                    onclick="openImagePreview('${p.url}', '${typeLabel}', '${p.date}', 'Recorded: ${timeFormatted}${uploadTimeFormatted ? ' | Photo Upload: ' + uploadTimeFormatted : ''}')"
                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                 <div style="display:none; width:100%; height:150px; align-items:center; justify-content:center; background:#f1f5f9; font-size:2rem;">📷</div>
                 <span style="position:absolute; top:6px; left:6px; background:${typeColor}; color:white; font-size:0.65rem; font-weight:700; padding:2px 8px; border-radius:20px;">${typeLabel}</span>
                 <input type="checkbox" ${isSelected ? 'checked' : ''}
                     style="position:absolute; top:10px; right:10px; width:20px; height:20px; cursor:pointer; accent-color:var(--danger);"
-                    onchange="_toggleAttPhotoSelection('${p.attendanceId}', '${p.type}', '${p.url}', this.checked); this.closest('.gallery-item').style.borderColor = this.checked ? 'var(--danger)' : 'transparent';">
+                    onchange="_toggleAttPhotoSelection('${p.attendanceId}', '${p.type}', '${p.url}', this.checked); this.closest('.gallery-item').style.borderColor = this.checked ? 'var(--danger)' : '${isMismatch ? '#f87171' : 'transparent'}';">
             </div>
             <div style="padding:0.75rem;">
                 <p style="margin:0; font-size:0.85rem; color:var(--gray);">${p.date}</p>
-                <p style="margin:0.25rem 0 0; font-weight:bold; color:${typeColor};">${timeFormatted}</p>
+                <p style="margin:0.25rem 0 0; font-weight:bold; color:${typeColor}; font-size:0.9rem;">
+                    Record: ${timeFormatted}
+                </p>
+                ${uploadTimeFormatted ? `
+                    <p style="margin:0.25rem 0 0; font-size:0.78rem; color:#475569;" title="Actual Server Upload Time">
+                        🕒 Upload: <b>${uploadTimeFormatted}</b>
+                    </p>
+                ` : ''}
+                ${isMismatch ? `
+                    <div style="margin-top:0.35rem; font-size:0.72rem; color:#b91c1c; background:#fee2e2; border:1px solid #fecaca; padding:2px 6px; border-radius:4px; font-weight:600;">
+                        ${mismatchNote}
+                    </div>
+                ` : ''}
             </div>`;
         grid.appendChild(item);
     });

@@ -96,4 +96,22 @@ router.post('/upload-photo', async (req, res) => {
     }
 });
 
+// EXPORT FULL AUDIT EXCEL WITH PHOTO TIMESTAMPS & MISMATCH AUDIT
+router.get('/export-audit-excel', async (req, res) => {
+    try {
+        const { generateMasterExcelBuffer } = require('../../scripts/generate_excel_audit');
+        const { buffer } = await generateMasterExcelBuffer();
+        const filename = `Siddhi_Attendance_Photo_Audit_Log_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Length', buffer.length);
+        res.send(buffer);
+    } catch (e) {
+        console.error('Audit Excel Export Error:', e);
+        res.status(500).json({ error: 'Failed to generate audit Excel: ' + e.message });
+    }
+});
+
 module.exports = router;
+

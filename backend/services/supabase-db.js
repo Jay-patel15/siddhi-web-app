@@ -283,7 +283,7 @@ const getDebitNoteById = async (id) => {
         if (error) throw new Error(error.message);
         if (data) {
             if (!data.employeeId && data.empId) data.employeeId = data.empId;
-            if (!data.empId && d.employeeId) data.empId = data.employeeId;
+            if (!data.empId && data.employeeId) data.empId = data.employeeId;
         }
         return data;
     });

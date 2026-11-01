@@ -20,6 +20,10 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
+// Supabase / HTTP API Request Logger (Preserves all 200 GET/POST logs permanently)
+const logService = require('./backend/services/logService');
+app.use(logService.httpLoggerMiddleware);
+
 // Native Gzip Compression Middleware for API Responses
 app.use('/api', (req, res, next) => {
     const acceptEncoding = req.headers['accept-encoding'] || '';
@@ -72,6 +76,7 @@ const debitNotesRoutes = require('./backend/routes/debitNotes');
 const paymentRoutes = require('./backend/routes/payments');
 const uploadRoutes = require('./backend/routes/uploads');
 const payrollRoutes = require('./backend/routes/payroll');
+const logsRoutes = require('./backend/routes/logs');
 
 // Mount Routes
 app.use('/api', authRoutes); 
@@ -85,6 +90,7 @@ app.use('/api/debit-notes', debitNotesRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/logs', logsRoutes);
 
 // Start Server (only when not imported by Vercel)
 if (process.env.VERCEL !== '1') {

@@ -154,12 +154,54 @@
                     </button>
                 </div>
 
+                <div class="card" style="margin-bottom:2rem;border-left:4px solid #6366f1;background:#f8fafc;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;">
+                        <div>
+                            <h3 style="margin-top:0;color:#1e293b;display:flex;align-items:center;gap:0.5rem;">
+                                🛡️ Master Attendance &amp; Photo Audit Log (Excel)
+                            </h3>
+                            <p style="color:var(--gray);font-size:0.9rem;margin-bottom:0.75rem;">
+                                Download complete database logs of all past months into Excel. Decodes exact server photo upload timestamps directly from Supabase, includes photo links and Google Maps locations, and automatically detects discrepancies where checkout time does not match photo time.
+                            </p>
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1.25rem;">
+                                <span style="background:#e0e7ff;color:#3730a3;padding:0.3rem 0.65rem;border-radius:4px;font-size:0.8rem;font-weight:600;">🕒 Decoded Photo Upload Timestamps</span>
+                                <span style="background:#fee2e2;color:#991b1b;padding:0.3rem 0.65rem;border-radius:4px;font-size:0.8rem;font-weight:600;">⚠️ Auto-Flags Mismatches</span>
+                                <span style="background:#dcfce7;color:#166534;padding:0.3rem 0.65rem;border-radius:4px;font-size:0.8rem;font-weight:600;">📅 All Past Months Included</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="btn-download-audit-excel" class="btn" style="background:#4f46e5;color:white;width:100%;padding:1rem;font-size:1.1rem;display:flex;align-items:center;justify-content:center;gap:0.5rem;font-weight:600;" onclick="downloadMasterAuditExcel()">
+                        <span style="font-size:1.3rem;">⬇️</span> Download Master Attendance &amp; Photo Audit Log (.xlsx)
+                    </button>
+                </div>
+
+                <div class="card" style="margin-bottom:2rem;border-left:4px solid #0284c7;background:#f0f9ff;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;">
+                        <div>
+                            <h3 style="margin-top:0;color:#0369a1;display:flex;align-items:center;gap:0.5rem;">
+                                🌐 Supabase HTTP API Logs (200 GET, POST, PUT Logs Excel)
+                            </h3>
+                            <p style="color:var(--gray);font-size:0.9rem;margin-bottom:0.75rem;">
+                                Full server &amp; Supabase HTTP API request logs (Status 200, 201, Methods GET, POST, PUT, DELETE, route endpoints, payloads, timestamps, IPs, and response times) spanning all past months. Never purged after 24 hours.
+                            </p>
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1.25rem;">
+                                <span style="background:#e0f2fe;color:#0369a1;padding:0.3rem 0.65rem;border-radius:4px;font-size:0.8rem;font-weight:600;">✅ 200 OK &amp; 201 Created Status Codes</span>
+                                <span style="background:#dbeafe;color:#1e40af;padding:0.3rem 0.65rem;border-radius:4px;font-size:0.8rem;font-weight:600;">🔄 GET / POST / PUT / DELETE Requests</span>
+                                <span style="background:#fef3c7;color:#92400e;padding:0.3rem 0.65rem;border-radius:4px;font-size:0.8rem;font-weight:600;">📁 5,470+ Historical Requests Preserved</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="btn-download-supabase-logs" class="btn" style="background:#0284c7;color:white;width:100%;padding:1rem;font-size:1.1rem;display:flex;align-items:center;justify-content:center;gap:0.5rem;font-weight:600;" onclick="downloadSupabaseLogsExcel()">
+                        <span style="font-size:1.3rem;">⬇️</span> Download Supabase HTTP API Logs (.xlsx)
+                    </button>
+                </div>
+
                 <div class="card" style="margin-bottom:2rem;border-left:4px solid var(--primary);">
                     <h3 style="margin-top:0;">📥 Download All Data (Excel Export)</h3>
-                    <p style="color:var(--gray);font-size:0.9rem;margin-bottom:1.5rem;">Export your Employees, Attendance, Advances, and Payments into separated tabs in an Excel file.</p>
+                    <p style="color:var(--gray);font-size:0.9rem;margin-bottom:1.5rem;">Export your Employees, Attendance (with photo links &amp; decoded timestamps), Advances, and Payments into separated tabs in an Excel file.</p>
                     <div style="display:flex;gap:1rem;margin-bottom:1.5rem;max-width:400px;flex-wrap:wrap;">
-                        <div class="form-group" style="flex:1;min-width:140px;"><label style="font-weight:600;">From Date</label><input type="date" id="export-all-start-date" value="2026-03-01"></div>
-                        <div class="form-group" style="flex:1;min-width:140px;"><label style="font-weight:600;">To Date</label><input type="date" id="export-all-end-date" value="2026-03-31"></div>
+                        <div class="form-group" style="flex:1;min-width:140px;"><label style="font-weight:600;">From Date</label><input type="date" id="export-all-start-date" value="2026-01-01"></div>
+                        <div class="form-group" style="flex:1;min-width:140px;"><label style="font-weight:600;">To Date</label><input type="date" id="export-all-end-date" value="2026-12-31"></div>
                     </div>
                     <button class="btn btn-primary" style="width:100%;padding:1rem;font-size:1.1rem;display:flex;align-items:center;justify-content:center;gap:0.5rem;" onclick="exportAllDataToExcel()">
                         <span style="font-size:1.3rem;">⬇️</span> Download All Data (Excel)

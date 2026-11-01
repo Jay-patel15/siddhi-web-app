@@ -4,8 +4,7 @@ const dbService = require('../services/supabase-db');
 
 router.get('/', async (req, res) => {
     try {
-        const advances = await dbService.getAllAdvances();
-        const payments = await dbService.getAllPayments();
+        const [advances, payments] = await Promise.all([dbService.getAllAdvances(), dbService.getAllPayments()]);
 
         const uploadList = [];
 

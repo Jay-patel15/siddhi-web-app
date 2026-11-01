@@ -4,8 +4,7 @@ const dbService = require('../services/supabase-db');
 
 router.get('/', async (req, res) => {
     try {
-        const attendance = await dbService.getAllAttendance();
-        const employees = await dbService.getAllEmployees();
+        const [attendance, employees] = await Promise.all([dbService.getAllAttendance(), dbService.getAllEmployees()]);
         const empMap = {};
         employees.forEach(e => { empMap[e.id] = e.name; });
 

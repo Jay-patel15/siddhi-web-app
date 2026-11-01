@@ -7,13 +7,14 @@ router.get('/', async (req, res) => {
     if (!month) return res.status(400).json({ error: 'Month required' });
 
     try {
-        const employees = await dbService.getAllEmployees();
-        const attendance = await dbService.getAllAttendance();
-        const advances = await dbService.getAllAdvances();
-        const debitNotes = await dbService.getAllDebitNotes();
-        const payments = await dbService.getAllPayments();
-
-        const settingsData = await dbService.getSettings();
+        const [employees, attendance, advances, debitNotes, payments, settingsData] = await Promise.all([
+            dbService.getAllEmployees(),
+            dbService.getAllAttendance(),
+            dbService.getAllAdvances(),
+            dbService.getAllDebitNotes(),
+            dbService.getAllPayments(),
+            dbService.getSettings()
+        ]);
         const stdHours = parseFloat(settingsData.standardHours || 8.5);
         const slabBase = parseFloat(settingsData.slabHours || 6);
 
